@@ -50,11 +50,9 @@ The Sprint 1-3 Bronze data was written locally. Copy it over so
 historic incremental cutoffs still work.
 
 ```bash
+# Run from the repo root.
 BRONZE_BUCKET=$(cd terraform && terraform output -raw bronze_bucket)
-aws s3 sync \
-  /Users/peter/Desktop/oss-pulse/data/bronze/events \
-  s3://$BRONZE_BUCKET/events/ \
-  --exact-timestamps
+aws s3 sync data/bronze/events s3://$BRONZE_BUCKET/events/ --exact-timestamps
 ```
 
 Verify the `_delta_log` came along — losing it means the table is

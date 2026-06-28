@@ -28,4 +28,10 @@ models:
       +schema: gold
 
 vars:
-  bronze_events_path: "/Users/peter/Desktop/oss-pulse/data/bronze/events"
+  # Bronze location. Resolution order:
+  #   1. OSS_PULSE_BRONZE_PATH env var (used in Sprint 5a cloud target to
+  #      point at s3a://... — see runbooks/cloud_apply_walkthrough.md)
+  #   2. --vars '{bronze_events_path: ...}' on the CLI
+  #   3. Default: ../data/bronze/events — repo-relative, works for any
+  #      reviewer who clones the repo and runs from the dbt/ directory
+  bronze_events_path: "{{ env_var('OSS_PULSE_BRONZE_PATH', '../data/bronze/events') }}"

@@ -4,7 +4,7 @@ sources:
   - name: bronze
     description: "Raw GH Archive events landed by spark/jobs/bronze_ingest.py"
     meta:
-      external_location: "{{ env_var('OSS_PULSE_BRONZE_PATH', '/Users/peter/Desktop/oss-pulse/data/bronze/events') }}"
+      external_location: "{{ env_var('OSS_PULSE_BRONZE_PATH', '../data/bronze/events') }}"
     tables:
       - name: events
         description: "Bronze events table (one row per GitHub event, envelope strongly typed, payload as raw JSON)"

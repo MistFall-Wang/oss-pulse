@@ -22,14 +22,14 @@ mkdir -p $AIRFLOW_HOME
 ### 2. Configure Airflow to read this project's DAGs and skip examples
 
 ```bash
-export AIRFLOW__CORE__DAGS_FOLDER=/Users/peter/Desktop/oss-pulse/airflow/dags
+# Run from the repo root so $(pwd) resolves correctly.
+export AIRFLOW__CORE__DAGS_FOLDER="$(pwd)/airflow/dags"
 export AIRFLOW__CORE__LOAD_EXAMPLES=False
 ```
 
 ### 3. Initialize the metadata DB
 
 ```bash
-cd /Users/peter/Desktop/oss-pulse
 .venv/bin/airflow db init
 ```
 

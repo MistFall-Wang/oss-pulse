@@ -23,13 +23,23 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import os
+from pathlib import Path
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
 
-PROJECT_ROOT = os.environ.get("OSS_PULSE_ROOT", "/Users/peter/Desktop/oss-pulse")
+# Resolve the repo root from this file's location:
+#   <repo>/airflow/dags/oss_pulse_pipeline.py  →  parents[2] = <repo>
+# Override with OSS_PULSE_ROOT when the DAG is symlinked / packaged.
+PROJECT_ROOT = os.environ.get(
+    "OSS_PULSE_ROOT",
+    str(Path(__file__).resolve().parents[2]),
+)
+
+# Java 17 location (Spark 3.5 breaks on Java 18+). Override on systems
+# where Corretto 17 lives elsewhere.
 JAVA_HOME = os.environ.get(
     "OSS_PULSE_JAVA_HOME",
     "/Library/Java/JavaVirtualMachines/amazon-corretto-17.jdk/Contents/Home",
