@@ -4,13 +4,11 @@
 
 <p align="center">
   <a href="https://github.com/MistFall-Wang/oss-pulse/actions/workflows/ci.yml"><img src="https://github.com/MistFall-Wang/oss-pulse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/python-3.11-3776ab?logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Spark-3.5-e25a1c?logo=apachespark&logoColor=white" alt="Spark">
-  <img src="https://img.shields.io/badge/Delta_Lake-3.2-00add8" alt="Delta Lake">
-  <img src="https://img.shields.io/badge/dbt-1.9-ff694b?logo=dbt&logoColor=white" alt="dbt">
-  <img src="https://img.shields.io/badge/Airflow-2.10-017cee?logo=apacheairflow&logoColor=white" alt="Airflow">
-  <img src="https://img.shields.io/badge/Terraform-1.15-7b42bc?logo=terraform&logoColor=white" alt="Terraform">
-  <img src="https://img.shields.io/badge/AWS%20S3-live-ff9900?logo=amazonaws&logoColor=white" alt="AWS S3 live">
+  &nbsp;
+  <img src="https://img.shields.io/badge/AWS%20S3-live-22c55e?logo=amazonaws&logoColor=white" alt="AWS S3 live">
+  <img src="https://img.shields.io/badge/reconcile%20delta-0.0000%25-22c55e" alt="reconcile delta 0">
+  <img src="https://img.shields.io/badge/ADRs-7%20accepted-d97706" alt="7 ADRs">
+  <img src="https://img.shields.io/badge/postmortems-1-d97706" alt="1 postmortem">
 </p>
 
 <p align="center">
@@ -45,6 +43,52 @@ cloud round-trip.
 > [ADR](docs/adr/). Every gate, postmortem, and verifier exists because it
 > caught a real problem at least once. The visualizations below all use real
 > measured numbers — nothing is illustrative.
+
+## Results
+
+<table align="center">
+  <tr>
+    <td align="center" width="20%">
+      <h2><a href="docs/postmortems/0001-schema-drift.md">0.0000&nbsp;%</a></h2>
+      <sub><b>batch ↔ streaming<br>reconcile delta</b><br>on 181,221 events</sub>
+    </td>
+    <td align="center" width="20%">
+      <h2><a href="docs/adr/">7&nbsp;/&nbsp;9</a></h2>
+      <sub><b>ADRs accepted</b><br>(2 optional in&nbsp;backlog)<br>every decision auditable</sub>
+    </td>
+    <td align="center" width="20%">
+      <h2><a href="quality/runner.py">18</a></h2>
+      <sub><b>data-quality gates</b><br>across 4 suites,<br>exit-coded for Airflow</sub>
+    </td>
+    <td align="center" width="20%">
+      <h2><a href="docs/runbooks/cloud_apply_walkthrough.md">live</a></h2>
+      <sub><b>Bronze on AWS&nbsp;S3</b><br>Terraform-applied,<br>smoke-test PASS</sub>
+    </td>
+    <td align="center" width="20%">
+      <h2><a href="docs/performance/sprint5b_tuning.md">−1.8&nbsp;s</a></h2>
+      <sub><b>perf "win"</b><br>that I refused<br>(it was JIT, not ZORDER)</sub>
+    </td>
+  </tr>
+</table>
+
+## Tech stack
+
+Every layer chosen with an alternative explicitly rejected. Versions pinned in `pyproject.toml`, `dbt/packages.yml`, `terraform/versions.tf`.
+
+| Layer | Tool | Version | Why this, not the obvious alternative |
+|-------|------|---------|----------------------------------------|
+| **Compute** | ![Spark](https://img.shields.io/badge/-PySpark-e25a1c?logo=apachespark&logoColor=white) | 3.5 | Same code runs on Databricks at TB scale; Pandas was fine for 613K rows but not for the all-year backfill target |
+| **Storage** | ![S3](https://img.shields.io/badge/-AWS%20S3-ff9900?logo=amazonaws&logoColor=white) + local FS | live | Local dev → S3 via Terraform, single `s3a://` URI swap |
+| **Table format** | ![Delta](https://img.shields.io/badge/-Delta%20Lake-00add8) | 3.2.1 | MERGE syntax + dbt-spark adapter maturity; Iceberg revisit when Unity Catalog is needed |
+| **Transformation** | ![dbt](https://img.shields.io/badge/-dbt--spark-ff694b?logo=dbt&logoColor=white) + dbt-utils | 1.9.2 / 1.4 | `ref()` / `source()` + declarative tests beat hand-managed model deps |
+| **Orchestration** | ![Airflow](https://img.shields.io/badge/-Airflow-017cee?logo=apacheairflow&logoColor=white) | 2.10.4 | Standard Sr DE expectation; parameterized DAG via XCom-passed bash script |
+| **Streaming** | ![Redpanda](https://img.shields.io/badge/-Redpanda-d97706) + Spark Structured Streaming | v24.2.7 | Kafka-API compatible, 2 s boot vs 30 s; consumer code unchanged |
+| **Cloud IaC** | ![Terraform](https://img.shields.io/badge/-Terraform-7b42bc?logo=terraform&logoColor=white) | 1.15.7 | Real `terraform apply`; partial fallback when bootstrap IAM lacks `kms:*` documented in runbook |
+| **CI/CD** | ![GH Actions](https://img.shields.io/badge/-GitHub%20Actions-2088ff?logo=githubactions&logoColor=white) | — | 3 jobs: ruff · pytest · dbt parse+compile, JDK 17 |
+| **Data quality** | custom Python (NOT Great Expectations) | — | 150 lines mirror GE's checkpoint pattern; trade-off [documented](quality/checks.py) |
+| **Lang / runtime** | ![Python](https://img.shields.io/badge/-Python-3776ab?logo=python&logoColor=white) ![Java](https://img.shields.io/badge/-Java%2017-007396?logo=openjdk&logoColor=white) ![SQL](https://img.shields.io/badge/-SQL-336791) | 3.11 / 17 / — | Java 17 required (Spark 3.5 breaks on Java 18+) |
+| **Package mgr** | ![uv](https://img.shields.io/badge/-uv-de5fe9) | 0.8 | Faster + reproducible-by-default lockfile vs pip |
+| **Linter / formatter** | ![ruff](https://img.shields.io/badge/-ruff-d7ff64?logoColor=black) | latest | check + format check in CI |
 
 ## At a glance
 
@@ -599,17 +643,6 @@ uv run python -m spark.jobs.incident_inject --cleanup
 # Cloud — read Bronze from S3 (after terraform apply + aws s3 sync)
 uv run python -m spark.jobs.s3_smoke_test --bucket oss-pulse-bronze-dev-9f3eb8a5
 ```
-
----
-
-## Status & next steps
-
-| State | What it means |
-|-------|---------------|
-| ✅ Sprint 0 – 6 done | Bronze → Silver → Gold + DQ + Airflow + CI + perf + postmortem + streaming MVP all shipped |
-| ✅ Sprint 5a Bronze live on AWS | Terraform-provisioned S3, Bronze synced, smoke test PASS — 613,876 rows match |
-| ⚠ Databricks compute pending | Workspace signup is user-side; [walkthrough](docs/runbooks/cloud_apply_walkthrough.md) Steps 7–11 ready when you are |
-| ⏳ Sprint 7–9 backlog | Streaming production-grade (time-warped replay, watermarks, continuous reconciliation, ADR-0008, 0009). Triggered only by job-market signal. |
 
 ---
 
