@@ -4,9 +4,11 @@ version = "0.1.0"
 description = "A production-grade GitHub activity lakehouse built on GH Archive."
 requires-python = ">=3.11"
 dependencies = [
+    "delta-spark==3.2.1",
     "ipython>=9.15.0",
     "pandas>=3.0.3",
     "pyarrow>=24.0.0",
+    "pyspark==3.5.3",
 ]
 
 [dependency-groups]
@@ -14,3 +16,6 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.15.20",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
