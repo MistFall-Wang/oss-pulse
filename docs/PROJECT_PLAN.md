@@ -226,30 +226,75 @@ heuristic. Better to find out now than to rewrite Sprint 3.
 top-event-count actors in the 2025 Bronze hours. Fail → ADR-0006 needs
 a third rule or different approach.
 
-### Sprint 3: Widen Silver, build marts 2 and 3
+### Sprint 3: Widen Silver, build marts 2 and 3 — DONE
 
-**Goal**: support the remaining Gold marts.
+**Deliverables produced** (Sprint 3a):
 
-**Silver layer additions** (in order of demand):
-- `events_pull_request` (for OSS Health)
-- `events_issue_comment` (for OSS Health)
-- `events_watch` (for Repo Growth: star events)
-- `events_fork` (for Repo Growth: fork events)
-- `events_issues` (for OSS Health)
+- ADR-0005 — Silver build strategy (tiered, demand-driven) + dbt
+  adapter swap plan for Sprint 5a
+- Silver: `events_pull_request`, `events_issues`,
+  `events_issue_comment` — incremental merge on id, schema yml with
+  not_null / accepted_values / unique tests (35/35 pass)
+- Gold: `oss_health_mart` (`docs/marts/gold_oss_health_mart.md`)
+  - Grain: `(repo_id, activity_date)`, composite-key invariant
+  - 11 metrics: PR open/close/merge counts + avg merge latency,
+    issue open/close + avg close latency, comment count + avg
+    first-non-opener-response latency, unique_contributors across
+    PR+issue+comment
+  - `spark/jobs/gold_health_verify.py`: grain invariant holds
+    (30,107 unique rows out of 30,107); busiest merged-PR row
+    (repo 35890081 on 2025-01-15, 54 merges) matches silver
+    recomputation to 1ms tolerance
+  - 18/18 schema tests pass
 
-**Gold layer additions**:
-- `gold.oss_health_mart` — PR merge latency, issue response time,
-  commit cadence per repo
-- `gold.bot_vs_human_activity_mart` — bot share over time, per-repo
-  bot impact (uses heuristic confirmed in Sprint 2.5)
+**Deliverables produced** (Sprint 3b):
 
-**Companion ADRs**:
-- ADR-0005 Silver build strategy (tiered, demand-driven) + dbt
-  adapter swap plan
-- ADR-0006 Bot identification rules (informed by Sprint 2.5)
+- ADR-0006 — Bot identification: Rule A (`[bot]` suffix) + Rule C
+  (`dbt/seeds/known_bots.csv` allowlist), with event-level
+  `is_app_event` as a separate signal (not folded into bot counts).
+  Rejects original Rule B per Sprint 2.5 spike evidence.
+- `dbt/seeds/known_bots.csv` — initial entry: `LombiqBot`
+- `dbt/macros/is_bot.sql` — shared macro used by both Gold marts
+- Silver: `events_watch`, `events_fork` (14/14 schema tests pass)
+- Gold: `bot_vs_human_activity_mart`
+  (`docs/marts/gold_bot_vs_human_activity_mart.md`)
+  - Grain: `(repo_id, activity_date)`, composite invariant
+  - 14 metrics: total/bot/human event counts, bot_event_share,
+    per-event-class bot counts (push/pr/issue/comment/watch/fork),
+    distinct bot/human actor counts, app_event_count
+  - 27/27 schema tests pass
+- `gold.repo_daily_activity.sql` — refactored to use the canonical
+  `is_bot()` macro (replaces the inline `like '%[bot]'` from
+  Sprint 2). Full-refreshed; 13/13 tests still pass.
+- `spark/jobs/gold_bot_verify.py` — grain invariant + cross-mart
+  reconciliation. The cross-mart check caught the divergence above
+  and forced repo_daily_activity to adopt the canonical rule before
+  Sprint 3b could ship. **0 mismatches after rebuild** across 162,719
+  joined keys.
 
-**Sprint 3 done means**: all three Gold marts exist, each with
-invariant validation against real Bronze data.
+**Data state**:
+- Silver tier 2: events_pull_request (38,141 rows),
+  events_issues (11,786), events_issue_comment (27,989)
+- Silver tier 3: events_watch (27,097), events_fork (7,062)
+- Gold: repo_daily_activity (162,719 rows),
+  oss_health_mart (30,107 rows),
+  bot_vs_human_activity_mart (199,416 rows)
+- Bot share distribution across 199,416 repo-days:
+  - 65.6% (130,834) at 0% bot share — pure human
+  - 32.0% (63,924) at 100% bot share — pure bot
+  -  2.3% (4,658)  somewhere in between — the interesting tail
+
+**Verified invariants**:
+- All 6 new Silver tables: `unique(id)` enforced (mirrors Bronze
+  ADR-0002 idempotency chain)
+- All 2 new Gold marts: composite-grain invariant enforced both by
+  `dbt_utils.unique_combination_of_columns` and runtime verifier
+- Cross-mart: `repo_daily_activity.bot_push_count ==
+  bot_vs_human_activity_mart.push_bot_count` for every joined key
+  (162,719 keys, 0 mismatches)
+- Cross-layer: `oss_health_mart.pr_merged_count` and
+  `pr_avg_merge_latency_hours` match silver recomputation to 1ms
+  on the busiest row
 
 ### Sprint 4: Data quality + orchestration
 

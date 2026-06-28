@@ -140,3 +140,88 @@ models:
           - not_null
           - dbt_utils.expression_is_true:
               expression: ">= 0"
+
+  - name: bot_vs_human_activity_mart
+    description: |
+      Gold: one row per (repo_id, activity_date). Bot vs human event
+      share + per-event-class bot counts. Bot classification via
+      is_bot() macro (ADR-0006: Rule A `[bot]` suffix + Rule C
+      known_bots allowlist). is_app_event surfaced separately, NOT
+      merged into bot counts (Sprint 2.5 spike rationale).
+
+      Sources: silver.events_push + events_pull_request + events_issues
+               + events_issue_comment + events_watch + events_fork
+      Design: docs/marts/gold_bot_vs_human_activity_mart.md
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - repo_id
+            - activity_date
+      - dbt_utils.expression_is_true:
+          expression: "bot_event_count + human_event_count <= event_count"
+    columns:
+      - name: repo_id
+        tests: [not_null]
+      - name: activity_date
+        tests: [not_null]
+      - name: event_count
+        description: Total events (all 6 classes) for this repo/day
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: bot_event_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+          - dbt_utils.expression_is_true:
+              expression: "<= event_count"
+      - name: human_event_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: bot_event_share
+        description: bot_event_count / event_count, 0 when event_count=0
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+          - dbt_utils.expression_is_true:
+              expression: "<= 1"
+      - name: push_bot_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: pr_bot_count
+        tests:
+          - not_null
+      - name: issue_bot_count
+        tests:
+          - not_null
+      - name: comment_bot_count
+        tests:
+          - not_null
+      - name: watch_bot_count
+        tests:
+          - not_null
+      - name: fork_bot_count
+        tests:
+          - not_null
+      - name: distinct_bot_actors
+        tests:
+          - not_null
+      - name: distinct_human_actors
+        tests:
+          - not_null
+      - name: app_event_count
+        description: |
+          IssueCommentEvent rows where comment.performed_via_github_app
+          is non-null. Distinct from bot_event_count by design — see
+          ADR-0006 and the Sprint 2.5 spike.
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"

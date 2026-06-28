@@ -193,3 +193,48 @@ models:
           NOT a bot identifier — see docs/spikes/bot_heuristic.md.
           Used by gold.bot_vs_human_activity_mart (Sprint 3b) as an
           event-level signal, separate from is_bot(actor_login).
+
+  - name: events_watch
+    description: |
+      Silver: flattened WatchEvent (= GitHub star action).
+      Payload is minimal (`action` only); the row is essentially the
+      envelope. Tier 3 Silver — feeds bot mart cross-event coverage
+      and the future Repo Growth mart (ADR-0005).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: actor_id
+        tests: [not_null]
+      - name: repo_id
+        tests: [not_null]
+      - name: created_at
+        tests: [not_null]
+      - name: ingest_hour
+        tests: [not_null]
+      - name: action
+        description: 'started (only observed value in current samples)'
+        tests:
+          - not_null
+
+  - name: events_fork
+    description: |
+      Silver: flattened ForkEvent. Envelope columns describe the
+      SOURCE repo (the one being forked); forkee_* columns describe
+      the NEW fork. Both are needed for cross-event joins (the source
+      side feeds Repo Growth, the forkee side could feed a future
+      "where do forks go" analysis).
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: actor_id
+        tests: [not_null]
+      - name: source_repo_id
+        description: The repo that was forked (envelope.repo.id)
+        tests: [not_null]
+      - name: forkee_repo_id
+        description: The new fork's repo id (payload.forkee.id)
+        tests: [not_null]
+      - name: created_at
+        tests: [not_null]
+      - name: ingest_hour
+        tests: [not_null]

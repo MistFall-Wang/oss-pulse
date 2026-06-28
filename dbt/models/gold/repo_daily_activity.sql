@@ -41,7 +41,7 @@ aggregated as (
         sum(commit_size)     as total_commits,
         sum(distinct_commit_size) as distinct_commits,
         count(distinct actor_id)  as unique_pushers,
-        sum(case when actor_login like '%[bot]' then 1 else 0 end) as bot_push_count
+        sum(case when {{ is_bot('actor_login') }} then 1 else 0 end) as bot_push_count
     from push
     group by repo_id, activity_date
 )
