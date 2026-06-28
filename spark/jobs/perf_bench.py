@@ -94,9 +94,7 @@ def bronze_filter_metrics(spark: SparkSession, event_type: str) -> dict:
     Returns: {read_files, read_bytes, output_rows, wall_seconds}
     """
     df = (
-        spark.read.format("delta")
-        .load(BRONZE_PATH)
-        .filter(F.col("type") == event_type)
+        spark.read.format("delta").load(BRONZE_PATH).filter(F.col("type") == event_type)
     )
     t0 = time.perf_counter()
     rows = df.count()

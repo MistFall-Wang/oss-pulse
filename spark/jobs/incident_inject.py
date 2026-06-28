@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import gzip
 import json
-import shutil
 import time
 from pathlib import Path
 
@@ -127,7 +126,9 @@ def main() -> None:
             "HOME": __import__("os").environ.get("HOME", ""),
         },
     )
-    print(f"[inject] bronze_ingest exit={res.returncode} in {time.perf_counter() - t0:.1f}s")
+    print(
+        f"[inject] bronze_ingest exit={res.returncode} in {time.perf_counter() - t0:.1f}s"
+    )
     if res.returncode != 0:
         print(res.stderr[-2000:])
         return
@@ -142,8 +143,7 @@ def main() -> None:
     sample = incident_rows.select("payload_raw").limit(1).collect()[0]
     print("  ", sorted(json.loads(sample["payload_raw"]).keys()))
     print(
-        "[bronze] notice: 'size' replaced by 'commit_count' "
-        "(this is the schema break)"
+        "[bronze] notice: 'size' replaced by 'commit_count' (this is the schema break)"
     )
     spark.stop()
     print("\n[inject] now run:")

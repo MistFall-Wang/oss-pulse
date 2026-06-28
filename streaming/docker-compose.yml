@@ -1,0 +1,43 @@
+# Redpanda single-broker for OSS Pulse streaming MVP (Sprint 6).
+#
+# Why Redpanda over Kafka:
+#   - Kafka-API compatible — same Spark/PySpark consumer code works
+#   - Single binary, no Zookeeper, no JVM — boots in ~2s vs ~30s
+#   - 1/10th the resources for a single-node dev setup
+#
+# Port choice: 19094 / 18083 / 18082. The user's other Docker project
+# (marketpulse) already binds 19092 — we deliberately pick non-overlapping
+# host ports so both compose stacks coexist.
+
+services:
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: oss-pulse-redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19094
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19094
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --smp 1
+      - --memory 512M
+      - --mode dev-container
+      - --default-log-level=warn
+    ports:
+      - "19094:19094"     # external Kafka API — Spark consumer connects here
+      - "18082:18082"     # Pandaproxy (REST proxy, optional)
+      - "18083:18083"     # admin API (replay.py uses for topic creation)
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health", "--brokers", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - oss_pulse_redpanda_data:/var/lib/redpanda/data
+
+volumes:
+  oss_pulse_redpanda_data:

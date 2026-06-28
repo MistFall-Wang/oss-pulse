@@ -206,26 +206,6 @@ Anything beyond these three is scope creep until Sprint 9+.
 nested payload paths. Sprint 2's `repo_daily_activity` uses Rule A
 only — PushEvent rarely involves apps in this sample.
 
-### Sprint 2.5: Bot heuristic spike (1 day) — NEW
-
-**Why this exists**: ADR-0006 (Sprint 3) will codify the rule
-"bot = login ends with `[bot]` OR `payload.performed_via_github_app` is
-non-null". If that rule's coverage is low (< 90% of the obvious bots
-in real Bronze data), the Bot mart in Sprint 3 needs a different
-heuristic. Better to find out now than to rewrite Sprint 3.
-
-**Deliverables**:
-- `spark/jobs/bot_heuristic_spike.py` — reads Bronze, reports:
-  - Count of distinct actors with `[bot]` login suffix
-  - Count of events where `payload.performed_via_github_app` is non-null
-  - Overlap (events flagged by both rules vs only one)
-  - Top 20 actors-by-event-count, manually labelled bot/human/uncertain
-- `docs/spikes/bot_heuristic.md` — findings + ADR-0006 prognosis
-
-**Pass condition**: union of the two rules catches ≥ 90 % of obviously-bot
-top-event-count actors in the 2025 Bronze hours. Fail → ADR-0006 needs
-a third rule or different approach.
-
 ### Sprint 3: Widen Silver, build marts 2 and 3 — DONE
 
 **Deliverables produced** (Sprint 3a):
@@ -296,97 +276,116 @@ a third rule or different approach.
   `pr_avg_merge_latency_hours` match silver recomputation to 1ms
   on the busiest row
 
-### Sprint 4: Data quality + orchestration
+### Sprint 4: Data quality + orchestration — DONE
 
-**Great Expectations integration**:
-- 8–10 expectations split across Bronze and Silver:
-  - Bronze: `id unique`, `id not null`, `type in {known types}`,
-    `created_at not null`, `public = true`
-  - Silver: per-mart not_null and range checks
-- GE failures block downstream tasks via Airflow sensor
+**Deliverables produced**:
+- `quality/checks.py` + `quality/runner.py` — lightweight DQ-gate
+  framework (intentionally *not* full Great Expectations, design
+  trade-off documented in checks.py docstring). 17 checks across 4
+  suites (bronze / silver / gold / cross_mart). Each suite exits
+  non-zero on failure → drop-in BashOperator gating. All 17 PASS on
+  current sample.
+- `airflow/dags/oss_pulse_pipeline.py` — parameterized DAG:
+  plan_ingest_range → ingest_bronze → gate_bronze → build_silver →
+  gate_silver → build_gold → gate_gold → gate_cross_mart →
+  dbt_test_all. Parse-validated under apache-airflow 2.10.4 with 0
+  import errors; arbitrary-date backfill via params.start_hour /
+  end_hour.
+- `docs/runbooks/`: backfill, schema_change, data_missing,
+  airflow_setup — all action-first with decision trees / per-symptom
+  fix matrices / verification commands
 
-**Airflow DAG**:
-- Tasks: download → bronze_ingest → run GE on bronze → dbt run silver →
-  GE on silver → dbt run gold → GE on gold → dbt test all
-- Parameterized for arbitrary date range backfill
-- Idempotent: re-running the DAG produces no duplicates (relies on
-  existing Bronze + Silver merge logic)
+**Senior-signal reinforced**: 4 (DQ gates) + 7 (operational docs).
 
-**Runbooks** (`docs/runbooks/`):
-1. `backfill.md` — running an arbitrary date range
-2. `schema_change.md` — what to do when upstream adds/removes a field
-3. `data_missing.md` — diagnosis path from "yesterday looks light" to
-   root cause
+### Sprint 5a: Cloud migration + IaC — code-complete (apply pending user AWS account)
 
-### Sprint 5a: Cloud migration + IaC
+**Deliverables produced**:
+- `terraform/` — S3 (3 buckets, KMS-encrypted, public-access blocked,
+  versioning + 60-day-to-IA lifecycle on Bronze per ADR-0007 cost
+  math), IAM cross-account role for Databricks workers, KMS key
+- `docs/runbooks/cloud_migration.md` — 9-step Sprint 5a runbook with
+  pre-reqs, terraform apply + output capture, aws s3 sync of existing
+  Bronze (preserves _delta_log), Databricks workspace setup, dbt
+  profile prod target, expected adapter-diff resolution notes,
+  row-count verification target (162,719 / 30,107 / 199,416 must
+  match), and rollback path
 
-**Cloud migration**:
-- Databricks Free Edition for compute (note: single-node, no job
-  scheduling — see Sprint 5b perf-tuning note)
-- S3 for Bronze storage
-- Snowflake free trial as alternative Gold serving (optional)
-- Swap `dbt-spark` → `dbt-databricks` adapter (per ADR-0005)
+**Status**: Terraform code is apply-ready. Actual `terraform apply`
+and the Databricks signup are user-side steps that cannot be done
+from this session.
 
-**IaC**:
-- Terraform manages S3 buckets, IAM roles, and (if used) Snowflake
-  databases / warehouses
-- Terraform does NOT manage Databricks-internal objects (notebooks,
-  jobs); those are tracked as code
+### Sprint 5b: CI + perf report + ADR-0007 + postmortem — DONE
 
-**Done means**: full pipeline runs end-to-end on Databricks/S3,
-results match local run on the same input.
+**Deliverables produced**:
+- `.github/workflows/ci.yml`: 3 jobs — static (ruff check + format),
+  unit-tests (pytest spark/tests on JDK 17), dbt-static (deps + parse
+  + compile). Full dbt run on Databricks deferred to Sprint 5a (which
+  is code-complete pending user signup).
+- `docs/performance/sprint5b_tuning.md` — 5-dimension perf benchmark
+  with **honest negative finding**: OPTIMIZE+ZORDER did NOT prune at
+  our 4-partition scale; the apparent wall-clock speedup was
+  JIT/cache, not data-skipping. Storage cost: pre-VACUUM doubled
+  (465 MB → 931 MB, restored to 466 MB after VACUUM). The whole
+  experiment promoted ADR-0009 (VACUUM cadence) from aspirational to
+  required.
+- `docs/adr/0007-bronze-storage-overhead.md` — Bronze on Delta is
+  1.7× raw `.json.gz`; planning constants for cloud cost forecasts
+  derived from real measurements.
+- `docs/postmortems/0001-schema-drift.md` — full 5-Whys for a
+  deliberately-injected `payload.size → payload.commit_count` rename.
+  Detection chain documented: Bronze + gate_bronze + silver build +
+  gate_silver all PASS; dbt test catches it at end-of-pipeline (200
+  violating rows). Root cause = gate placement, not missing test.
+  Fix: coalesce(size, commit_count) in events_push.sql + new
+  `silver_commit_size_not_null` gate that moves detection upstream.
+- `spark/jobs/perf_bench.py`, `perf_vacuum.py`, `incident_inject.py`
+  — reproducible scripts.
 
-### Sprint 5b: CI + perf report + postmortem
+**Senior signals reinforced**: 5 (perf tuning report) + 7
+(postmortem + ADR).
 
-**CI/CD via GitHub Actions**:
-- On every PR: `ruff`, `pytest` (chispa-based PySpark unit tests),
-  `dbt compile`, `dbt parse`
-- On merge to main: `dbt run --target prod`, `dbt test`
+### Sprint 6: Streaming MVP — DONE
 
-**Performance tuning report** (`docs/performance/sprint5_tuning.md`):
-- Run **locally on multi-core PySpark**, not on Databricks Free
-  Edition (single node = no meaningful tuning surface). Document this
-  choice in the report so an interviewer asking "what cluster did you
-  tune on" gets a defensible answer.
-- Pick the slowest job (likely Bronze write or Silver events_push merge)
-- Measure five dimensions: data volume, wall clock, shuffle write,
-  file count, cost
-- Apply tuning: Z-ORDER, partition pruning, broadcast join, file sizing
-- Re-measure, document trade-offs
+**Deliverables produced**:
+- `streaming/docker-compose.yml` — Redpanda v24.2.7 single broker on
+  port 19094 (deliberately chosen to coexist with the user's other
+  Docker projects)
+- `streaming/replay.py` — kafka-python producer; replays one hour's
+  PushEvents (181,221 messages from 2025-01-15-12 in ~43 s at
+  ~4 k msg/s), keyed by `repo_id` so the same repo's events hash to
+  the same partition
+- `streaming/consumer.py` — Spark Structured Streaming with
+  `availableNow` trigger + `foreachBatch` + Delta MERGE on `id`
+  (exactly-once via MERGE idempotency, no separate offset tracking)
+- `streaming/reconcile.py` — batch ↔ streaming row count + commits sum
+  + set-difference on `id`; threshold < 0.01 %
+- `streaming/README.md` — full demo runbook + result + design notes
 
-**ADR-0007**: storage overhead measurement (resolved by real Bronze data)
+**Reconciliation result on 2025-01-15-12**:
 
-**Incident postmortem** (`docs/postmortems/0001-schema-drift.md`):
-- Deliberately introduce a breaking schema change on a single hourly
-  file (e.g. rename `payload.size` to `payload.commit_count`)
-- Document the incident in 5 Whys format:
-  detection → diagnosis → mitigation → recovery → preventive measures
+```
+batch rows:        181,221
+streaming rows:    181,221
+row count delta:   +0 (0.0000%)
+batch commits Σ:   576,167
+streaming commits: 576,167
+ids only in batch:    0
+ids only in streaming: 0
+```
 
-**OpenLineage + Marquez** (stretch):
-- Add OpenLineage emitters to Spark + dbt
-- Render lineage in Marquez locally
-- Drop if Sprint 5b is at risk of slipping; not interview-critical.
+**Zero divergence on 181,221 events.** Threshold 0.01 %; actual
+0.0000 %. Senior signal 6 (batch + streaming story) demonstrated.
 
-**End-of-Sprint 5b = the 9/10 version**. Resume-shippable.
+### Sprint 7-9: Streaming production-grade — backlog (optional)
 
-### Sprint 6: Streaming MVP — minimum demo (≤ 1 week)
+Triggered only if a job-market signal or interviewer asks for depth.
+Otherwise the time is better spent on interview prep / blog writing /
+another portfolio piece.
 
-**Why a smaller MVP**: full streaming + reconciliation in 4 weeks
-(original Sprint 6-9) is real engineering. Most Sr DE roles in Canada
-will not probe streaming this deeply. Ship the demo, get interview
-feedback, then decide.
-
-**MVP deliverables**:
-- Redpanda in Docker (1 broker)
-- `streaming/replay.py` — replay 1 day of PushEvents from one Bronze
-  hour to a `gh-events` topic, preserving event timestamps
-- `streaming/consumer.py` — Structured Streaming consumer writes
-  to `silver_streaming.events_push` (separate Delta path)
-- `streaming/reconcile.py` — for that ingest_hour, batch silver vs
-  streaming silver row counts differ by < 0.01 %
-
-**Done means**: one talking-point demo. Code runs. Reconcile passes
-once. No SLA, no production-grade.
+If pursued: time-warped replay (configurable speed), watermark-based
+late-event handling, continuous reconciliation with root-cause
+categorization, ADR-0008 (streaming time semantics), ADR-0009
+(OPTIMIZE/VACUUM cadence), real-dollar cost report.
 
 ### Sprint 7-9: Streaming production-grade (optional)
 
@@ -394,31 +393,21 @@ once. No SLA, no production-grade.
 for depth. Otherwise leave as backlog and invest the time in
 interview prep, blog writing, or another portfolio piece.
 
-**Scope** (if pursued):
-- Time-warped replay (configurable speed)
-- Watermark-based late-event handling
-- foreachBatch + Delta MERGE for streaming idempotency
-- Continuous reconciliation with root-cause categorization of
-  differences
-- ADR-0008 streaming time semantics
-- ADR-0009 OPTIMIZE / VACUUM cadence
-- Real-dollar cost report
-
 ---
 
 ## ADR registry
 
-| #    | Title                                              | Status                  |
-|------|----------------------------------------------------|-------------------------|
-| 0001 | Bronze payload handling                            | Accepted                |
-| 0002 | event_id as the sole idempotency key               | Accepted                |
-| 0003 | Partition Bronze by ingest_hour, ZORDER by created_at | Accepted             |
-| 0004 | No surrogate keys; use GitHub source ids           | Sprint 2 (codify)       |
-| 0005 | Silver build strategy + dbt adapter swap plan      | Sprint 3                |
-| 0006 | Bot identification rules                           | Sprint 3 (informed by Sprint 2.5) |
-| 0007 | Storage overhead measurement (Bronze)              | Sprint 5b               |
-| 0008 | Streaming time semantics                           | Sprint 7 (if pursued)   |
-| 0009 | OPTIMIZE / VACUUM cadence                          | Sprint 9 (if pursued)   |
+| #    | Title                                                   | Status   |
+|------|---------------------------------------------------------|----------|
+| 0001 | Bronze payload handling                                 | Accepted |
+| 0002 | event_id as the sole idempotency key                    | Accepted |
+| 0003 | Partition Bronze by ingest_hour, ZORDER by created_at   | Accepted |
+| 0004 | No surrogate keys; use GitHub source ids                | Accepted |
+| 0005 | Silver build strategy + dbt adapter swap plan           | Accepted |
+| 0006 | Bot identification rules (Rule A + Rule C + is_app_event) | Accepted |
+| 0007 | Bronze storage overhead (1.7× raw .json.gz, planning constants) | Accepted |
+| 0008 | Streaming time semantics                                | Sprint 7 (if pursued) |
+| 0009 | OPTIMIZE / VACUUM cadence                               | Sprint 9 (if pursued; preview captured in Sprint 5b tuning report) |
 
 ADR format: MADR-lite. See any existing ADR in `docs/adr/` for the template.
 Status enum: Proposed / Accepted / Superseded.
