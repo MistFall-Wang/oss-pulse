@@ -49,6 +49,28 @@ tables (`silver.events_push`, `silver.events_pull_request`, ...) on
 demand, driven by Gold mart requirements (see ADR-0005 for Silver
 build strategy).
 
+## Probe field selection criteria
+
+A field qualifies for `payload_probe` if and only if it satisfies all of:
+
+1. Top-level under `payload` (no nested struct extraction)
+2. Used by ingest-time data quality expectations or operational debugging
+3. Either universally present in at least one common event type, or
+   intentionally tracked as a drift indicator
+
+Initial probe fields:
+
+| Field           | Source event types       | Used by                              |
+|-----------------|--------------------------|--------------------------------------|
+| `action`        | PullRequest, Issues, ... | Ingest QA: action enumeration check  |
+| `push_id`       | PushEvent                | Ingest QA: PushEvent non-null check  |
+| `repository_id` | PushEvent (2017+)        | Cross-year schema drift indicator    |
+| `size`          | PushEvent                | Ingest QA: numeric range check       |
+| `distinct_size` | PushEvent                | Ingest QA: numeric range check       |
+
+Adding a new probe field requires a PR that updates this table and
+references which selection criterion is satisfied.
+
 ## Consequences
 
 **Positive**
