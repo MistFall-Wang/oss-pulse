@@ -1,0 +1,172 @@
+
+======================================================================
+SCHEMA DRIFT EVIDENCE
+======================================================================
+
+A. Event counts and event type sets across years
+----------------------------------------------------------------------
+  2015-01-15-12: 21,062 events, 14 distinct types
+    types = ['CommitCommentEvent', 'CreateEvent', 'DeleteEvent', 'ForkEvent', 'GollumEvent', 'IssueCommentEvent', 'IssuesEvent', 'MemberEvent', 'PublicEvent', 'PullRequestEvent', 'PullRequestReviewCommentEvent', 'PushEvent', 'ReleaseEvent', 'WatchEvent']
+    top 5 =
+      PushEvent                        10,584
+      CreateEvent                       2,192
+      IssueCommentEvent                 2,129
+      WatchEvent                        1,994
+      IssuesEvent                       1,155
+
+  2018-01-15-12: 63,463 events, 14 distinct types
+    types = ['CommitCommentEvent', 'CreateEvent', 'DeleteEvent', 'ForkEvent', 'GollumEvent', 'IssueCommentEvent', 'IssuesEvent', 'MemberEvent', 'PublicEvent', 'PullRequestEvent', 'PullRequestReviewCommentEvent', 'PushEvent', 'ReleaseEvent', 'WatchEvent']
+    top 5 =
+      PushEvent                        31,111
+      CreateEvent                       9,392
+      WatchEvent                        6,517
+      IssueCommentEvent                 4,778
+      PullRequestEvent                  3,396
+
+  2025-01-15-12: 270,553 events, 15 distinct types
+    types = ['CommitCommentEvent', 'CreateEvent', 'DeleteEvent', 'ForkEvent', 'GollumEvent', 'IssueCommentEvent', 'IssuesEvent', 'MemberEvent', 'PublicEvent', 'PullRequestEvent', 'PullRequestReviewCommentEvent', 'PullRequestReviewEvent', 'PushEvent', 'ReleaseEvent', 'WatchEvent']
+    top 5 =
+      PushEvent                       181,221
+      CreateEvent                      27,867
+      PullRequestEvent                 16,165
+      IssueCommentEvent                 9,889
+      WatchEvent                        8,977
+
+
+B. Top-level field set across years
+----------------------------------------------------------------------
+  2015-01-15-12: ['actor', 'created_at', 'id', 'org', 'payload', 'public', 'repo', 'type']
+  2018-01-15-12: ['actor', 'created_at', 'id', 'org', 'payload', 'public', 'repo', 'type']
+  2025-01-15-12: ['actor', 'created_at', 'id', 'org', 'payload', 'public', 'repo', 'type']
+
+  [2015-01-15-12 -> 2025-01-15-12]
+    ADDED:   []
+    REMOVED: []
+
+
+C. Top-level value types across years
+----------------------------------------------------------------------
+  2015-01-15-12
+    actor       : ['object']
+    created_at  : ['str']
+    id          : ['str']
+    org         : ['object']
+    payload     : ['object']
+    public      : ['bool']
+    repo        : ['object']
+    type        : ['str']
+  2018-01-15-12
+    actor       : ['object']
+    created_at  : ['str']
+    id          : ['str']
+    org         : ['object']
+    payload     : ['object']
+    public      : ['bool']
+    repo        : ['object']
+    type        : ['str']
+  2025-01-15-12
+    actor       : ['object']
+    created_at  : ['str']
+    id          : ['str']
+    org         : ['object']
+    payload     : ['object']
+    public      : ['bool']
+    repo        : ['object']
+    type        : ['str']
+
+
+D. payload field schema drift by event type
+----------------------------------------------------------------------
+
+  >>> PushEvent <<<
+    2015-01-15-12 (10,584 events)
+      first-level keys = ['before', 'commits', 'distinct_size', 'head', 'push_id', 'ref', 'size']
+      nested path count <= depth 4: 14
+    2018-01-15-12 (31,111 events)
+      first-level keys = ['before', 'commits', 'distinct_size', 'head', 'push_id', 'ref', 'size']
+      nested path count <= depth 4: 14
+    2025-01-15-12 (181,221 events)
+      first-level keys = ['before', 'commits', 'distinct_size', 'head', 'push_id', 'ref', 'repository_id', 'size']
+      nested path count <= depth 4: 15
+
+    [2015-01-15-12 -> 2025-01-15-12] first-level payload keys
+      ADDED fields:   ['repository_id']
+      REMOVED fields: (none)
+    [2015-01-15-12 -> 2025-01-15-12] nested payload paths <= depth 4
+      ADDED path count:   1
+      REMOVED path count: 0
+      ADDED path sample:   ['repository_id']
+      REMOVED path sample: (none)
+
+  >>> IssueCommentEvent <<<
+    2015-01-15-12 ( 2,129 events)
+      first-level keys = ['action', 'comment', 'issue']
+      nested path count <= depth 4: 120
+    2018-01-15-12 ( 4,778 events)
+      first-level keys = ['action', 'comment', 'issue']
+      nested path count <= depth 4: 144
+    2025-01-15-12 ( 9,889 events)
+      first-level keys = ['action', 'comment', 'issue']
+      nested path count <= depth 4: 309
+
+    [2015-01-15-12 -> 2025-01-15-12] first-level payload keys
+      ADDED fields:   (none)
+      REMOVED fields: (none)
+    [2015-01-15-12 -> 2025-01-15-12] nested payload paths <= depth 4
+      ADDED path count:   189
+      REMOVED path count: 0
+      ADDED path sample:   ['comment.author_association', 'comment.node_id', 'comment.performed_via_github_app', 'comment.performed_via_github_app.client_id', 'comment.performed_via_github_app.created_at', 'comment.performed_via_github_app.description', 'comment.performed_via_github_app.events', 'comment.performed_via_github_app.events[]', 'comment.performed_via_github_app.external_url', 'comment.performed_via_github_app.html_url', 'comment.performed_via_github_app.id', 'comment.performed_via_github_app.name', 'comment.performed_via_github_app.node_id', 'comment.performed_via_github_app.owner', 'comment.performed_via_github_app.owner.avatar_url', 'comment.performed_via_github_app.owner.events_url', 'comment.performed_via_github_app.owner.followers_url', 'comment.performed_via_github_app.owner.following_url', 'comment.performed_via_github_app.owner.gists_url', 'comment.performed_via_github_app.owner.gravatar_id', 'comment.performed_via_github_app.owner.html_url', 'comment.performed_via_github_app.owner.id', 'comment.performed_via_github_app.owner.login', 'comment.performed_via_github_app.owner.node_id', 'comment.performed_via_github_app.owner.organizations_url']
+      REMOVED path sample: (none)
+
+
+E. Sample 2015 PushEvent structure
+----------------------------------------------------------------------
+{
+  "id": "2514502600",
+  "type": "PushEvent",
+  "actor": {
+    "id": 1067895,
+    "login": "DennisOSRM",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/DennisOSRM",
+    "avatar_url": "https://avatars.githubusercontent.com/u/1067895?"
+  },
+  "repo": {
+    "id": 2436255,
+    "name": "Project-OSRM/osrm-backend",
+    "url": "https://api.github.com/repos/Project-OSRM/osrm-backend"
+  },
+  "payload": {
+    "push_id": 547132029,
+    "size": 1,
+    "distinct_size": 1,
+    "ref": "refs/heads/develop",
+    "head": "6e138bbf543b6dbf4581d49930391ebd64ee783a",
+    "before": "6dabf4507aa2fa5ea2cbfe98b0eea63addffd788",
+    "commits": [
+      {
+        "sha": "6e138bbf543b6dbf4581d49930391ebd64ee783a",
+        "author": {
+          "email": "59bd0a3ff43b32849b319e645d4798d8a5d1e889@project-osrm.org",
+          "name": "Dennis Luxen"
+        },
+        "message": "fixes data structure tests:\n\n- MapStorage: fix returned index in peek_index() on fail\n- UnorderedMapStorage: fix returned index in peek_index() on fail\n- BinaryHeap: auto-deduce Index type\n- ArrayStorage: replace raw array with std::vector",
+        "distinct": true,
+        "url": "https://api.github.com/repos/Project-OSRM/osrm-backend/commits/6e138bbf543b6dbf4581d49930391ebd64ee783a"
+      }
+    ]
+  },
+  "public": true,
+  "created_at": "2015-01-15T12:00:01Z",
+  "org": {
+    "id": 8207060,
+    "login": "Project-OSRM",
+    "gravatar_id": "",
+    "url": "https://api.github.com/orgs/Project-OSRM",
+    "avatar_url": "https://avatars.githubusercontent.com/u/8207060?"
+  }
+}
+
+======================================================================
+Done. Schema drift is now empirical, not assumed.
+======================================================================
