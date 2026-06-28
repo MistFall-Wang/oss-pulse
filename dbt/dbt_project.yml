@@ -23,6 +23,9 @@ models:
     +file_format: delta
     silver:
       +materialized: table
+      +schema: silver
+    gold:
+      +schema: gold
 
 vars:
   bronze_events_path: "/Users/peter/Desktop/oss-pulse/data/bronze/events"

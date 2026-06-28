@@ -1,0 +1,45 @@
+========== bot heuristic spike ==========
+bronze path:        data/bronze/events
+total events:       613,876
+total actors:       148,587
+
+--- event counts ---
+rule A only (login ~ [bot]):     166,939
+rule B only (performed_via_app): 7,792
+either rule (A union B):         166,979
+both rules (A intersect B):      7,752
+either share of events:          27.20%
+
+--- distinct actor counts ---
+rule A actors:  631
+rule B actors:  324
+either actors:  658
+either share of actors: 0.44%
+
+--- top 20 actors by event count (manual label aid) ---
+flag legend: A = login ~ [bot], B = performed_via_github_app non-null
+  rank  login                                           events  A  B
+     1  github-actions[bot]                            129,533  1  1
+     2  renovate[bot]                                    6,480  1  1
+     3  dependabot[bot]                                  6,203  1  1
+     4  pull[bot]                                        4,491  1  .
+     5  swa-runner-app[bot]                              3,635  1  .
+     6  frdpzk2                                          2,672  .  .
+     7  zacw-243L                                        1,998  .  .
+     8  Hall-1910                                        1,875  .  .
+     9  CelestiaNFT                                      1,829  .  .
+    10  direwolf-github                                  1,788  .  .
+    11  LombiqBot                                        1,752  .  .
+    12  SoliSpirit                                       1,359  .  .
+    13  sonarqubecloud[bot]                              1,274  1  1
+    14  iniadittt                                        1,257  .  .
+    15  Lil-Seabas                                       1,254  .  .
+    16  hotspotlab                                       1,192  .  .
+    17  Alexey-Gorulev-kernelics                         1,144  .  .
+    18  blast0rama                                       1,124  .  .
+    19  coderabbitai[bot]                                1,108  1  1
+    20  freecall2019                                       974  .  .
+
+--- per-event-type breakdown of rule B (performed_via_github_app) ---
+  IssueCommentEvent                  7,784
+  IssuesEvent                            8

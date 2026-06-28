@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: repo_daily_activity
+    description: |
+      Gold: one row per (repo_id, activity_date). Daily PushEvent rollup
+      with bot/non-bot split. Source of truth for the Repo Growth mart
+      (Sprint 3) and downstream anomaly detection.
+
+      See design doc: docs/marts/gold_repo_daily_activity.md
+      Bot rule (A only): docs/spikes/bot_heuristic.md (Sprint 2.5)
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - repo_id
+            - activity_date
+    columns:
+      - name: repo_id
+        description: GitHub repository id (stable across renames, ADR-0004)
+        tests:
+          - not_null
+      - name: activity_date
+        description: DATE(created_at) of the PushEvent (UTC, not ingest_hour)
+        tests:
+          - not_null
+      - name: repo_name
+        description: Most recent repo_name observed for the repo on that day
+      - name: push_count
+        description: Distinct PushEvent count for this repo/day
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: total_commits
+        description: sum(payload.size) across all pushes — includes merge/duplicate commits
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: distinct_commits
+        description: sum(payload.distinct_size) — GitHub's per-push de-duped count
+        tests:
+          - not_null
+      - name: unique_pushers
+        description: count(distinct actor_id) — humans + bots together
+        tests:
+          - not_null
+      - name: bot_push_count
+        description: Pushes where actor_login ends with [bot] (spike Rule A)
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: non_bot_push_count
+        description: push_count - bot_push_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: "= push_count - bot_push_count"
