@@ -35,3 +35,6 @@ dbt/spark-warehouse/
 dbt/dbt.log
 dbt/metastore_db/
 dbt/derby.log
+
+# Stray runtime logs (sometimes dbt writes to project root)
+logs/
