@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OSS Pulse — GitHub activity lakehouse</title>
+<meta name="description" content="A production-grade GitHub activity lakehouse built on the GH Archive dataset. End-to-end medallion architecture with idempotency, DQ gates, performance tuning, a real postmortem, and batch/streaming reconciliation.">
+<style>
+:root {
+  --bg: #0a0f1c;
+  --bg-elev: #131826;
+  --bg-elev-2: #1a2032;
+  --border: #232a3d;
+  --border-soft: #1a2032;
+  --text: #e6ebf4;
+  --muted: #8b95a8;
+  --dim: #5b6478;
+  --accent: #ffd166;
+  --accent-soft: #4a3d18;
+  --bronze: #cd7f32;
+  --silver: #b0bec5;
+  --gold: #ffd166;
+  --green: #4ade80;
+  --red: #f87171;
+  --blue: #60a5fa;
+  --purple: #a78bfa;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color .15s; }
+a:hover { border-bottom-color: var(--accent); }
+
+code, .mono { font-family: var(--mono); }
+code { background: var(--bg-elev-2); padding: 2px 6px; border-radius: 4px; font-size: 0.88em; color: var(--accent); }
+pre { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.55; color: var(--text); }
+pre .c { color: var(--dim); font-style: italic; }
+pre .k { color: var(--purple); }
+pre .s { color: var(--green); }
+pre .n { color: var(--accent); }
+
+.container { max-width: 1100px; margin: 0 auto; padding: 0 28px; }
+
+/* ---- top bar ---- */
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: rgba(10, 15, 28, .85);
+  backdrop-filter: blur(8px);
+  position: sticky; top: 0; z-index: 50;
+}
+.topbar .container { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; padding-bottom: 14px; }
+.brand { font-family: var(--mono); font-size: 14px; color: var(--text); letter-spacing: 0.02em; }
+.brand .dot { color: var(--accent); }
+.nav { display: flex; gap: 22px; font-size: 13px; }
+.nav a { color: var(--muted); border-bottom: none; }
+.nav a:hover { color: var(--text); }
+
+/* ---- hero ---- */
+.hero { padding: 80px 0 60px; }
+.kicker { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 18px; }
+.hero h1 {
+  font-size: 56px; line-height: 1.05; margin: 0 0 22px;
+  font-weight: 700; letter-spacing: -0.02em;
+}
+.hero h1 .grad { background: linear-gradient(95deg, var(--accent) 0%, #f59e42 50%, var(--red) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero .lede { font-size: 19px; color: var(--muted); max-width: 760px; line-height: 1.55; margin-bottom: 32px; }
+
+.cta { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 48px; }
+.cta a { display: inline-flex; align-items: center; padding: 11px 18px; border-radius: 8px; font-family: var(--mono); font-size: 13px; border-bottom: none; }
+.cta .primary { background: var(--accent); color: #1a1305; }
+.cta .primary:hover { background: #ffdc8a; }
+.cta .secondary { background: var(--bg-elev); color: var(--text); border: 1px solid var(--border); }
+.cta .secondary:hover { background: var(--bg-elev-2); }
+
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.badge {
+  font-family: var(--mono); font-size: 12px; padding: 5px 11px; border-radius: 5px;
+  background: var(--bg-elev); color: var(--muted); border: 1px solid var(--border);
+}
+
+/* ---- section ---- */
+section { padding: 72px 0; border-top: 1px solid var(--border-soft); }
+section h2 {
+  font-size: 32px; margin: 0 0 8px; font-weight: 700; letter-spacing: -0.01em;
+}
+section h2 .num { color: var(--dim); font-family: var(--mono); font-size: 18px; margin-right: 16px; font-weight: 400; }
+section .section-lede { color: var(--muted); font-size: 16px; max-width: 720px; margin-bottom: 40px; }
+
+h3 { font-size: 18px; margin: 32px 0 14px; font-weight: 600; color: var(--text); }
+h3 .tag { font-family: var(--mono); font-size: 11px; color: var(--accent); padding: 2px 8px; background: var(--accent-soft); border-radius: 4px; margin-left: 10px; vertical-align: middle; letter-spacing: 0.05em; text-transform: uppercase; }
+
+/* ---- KPI cards ---- */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 8px; }
+.kpi {
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px;
+  padding: 22px 20px; transition: border-color .15s;
+}
+.kpi:hover { border-color: var(--dim); }
+.kpi .v { font-family: var(--mono); font-size: 28px; color: var(--accent); font-weight: 600; letter-spacing: -0.01em; }
+.kpi .l { font-size: 12px; color: var(--muted); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+.kpi .sub { font-size: 12px; color: var(--dim); margin-top: 4px; }
+
+/* ---- architecture diagram ---- */
+.arch { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 32px 24px; overflow-x: auto; }
+.arch-row { display: flex; align-items: stretch; gap: 24px; margin-bottom: 22px; }
+.arch-row:last-child { margin-bottom: 0; }
+.arch-label {
+  flex: 0 0 90px; font-family: var(--mono); font-size: 13px; color: var(--muted);
+  display: flex; align-items: center; padding-right: 14px; border-right: 1px solid var(--border);
+}
+.arch-cells { display: grid; gap: 12px; flex: 1; }
+.arch-cells.r-1 { grid-template-columns: 1fr; }
+.arch-cells.r-6 { grid-template-columns: repeat(6, 1fr); }
+.arch-cells.r-3 { grid-template-columns: repeat(3, 1fr); }
+.cell {
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 14px 12px; min-height: 84px; display: flex; flex-direction: column;
+}
+.cell .nm { font-family: var(--mono); font-size: 13px; color: var(--text); font-weight: 600; word-break: break-all; }
+.cell .ct { font-family: var(--mono); font-size: 18px; color: var(--accent); margin-top: auto; padding-top: 8px; font-weight: 600; }
+.cell .unit { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+.cell.bronze { border-top: 3px solid var(--bronze); }
+.cell.silver { border-top: 3px solid var(--silver); }
+.cell.gold { border-top: 3px solid var(--gold); }
+.cell.stream { border-top: 3px solid var(--blue); }
+.cell.raw { border-top: 3px solid var(--dim); }
+.arrow {
+  text-align: center; font-family: var(--mono); color: var(--dim); font-size: 18px;
+  padding: 2px 0; line-height: 1;
+}
+
+/* ---- bar charts ---- */
+.bar-chart { display: grid; gap: 10px; }
+.bar-row { display: grid; grid-template-columns: 200px 1fr 90px; gap: 16px; align-items: center; }
+.bar-row .nm { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.bar-row .bar-wrap { background: var(--bg-elev); border-radius: 4px; overflow: hidden; height: 22px; position: relative; }
+.bar-row .bar {
+  height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent) 0%, #f59e42 100%);
+  display: flex; align-items: center; padding-left: 10px; color: #1a1305; font-family: var(--mono); font-size: 11px; font-weight: 600;
+}
+.bar-row .v { font-family: var(--mono); font-size: 13px; color: var(--text); text-align: right; }
+.bar-row .bar.green { background: linear-gradient(90deg, var(--green) 0%, #22d3a5 100%); }
+.bar-row .bar.blue  { background: linear-gradient(90deg, var(--blue) 0%, #818cf8 100%); }
+.bar-row .bar.muted { background: var(--bg-elev-2); color: var(--muted); }
+
+/* ---- bot split ---- */
+.stacked { display: flex; height: 56px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); margin: 18px 0 12px; }
+.stacked > div { display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; font-weight: 600; }
+.stacked .s-human  { background: linear-gradient(120deg, var(--green) 0%, #22d3a5 100%); color: #08221a; }
+.stacked .s-bot    { background: linear-gradient(120deg, var(--blue) 0%, #6366f1 100%); color: #0a1230; }
+.stacked .s-mixed  { background: linear-gradient(120deg, var(--accent) 0%, #f59e42 100%); color: #1a1305; }
+.stack-legend { display: flex; gap: 18px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.stack-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 7px; vertical-align: middle; }
+.stack-legend .dot.human { background: var(--green); }
+.stack-legend .dot.bot { background: var(--blue); }
+.stack-legend .dot.mixed { background: var(--accent); }
+
+/* ---- detection chain ---- */
+.chain { display: grid; gap: 8px; margin-top: 18px; }
+.chain-step {
+  display: grid; grid-template-columns: 32px 1fr auto; gap: 14px; align-items: center;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px;
+}
+.chain-step.fail { border-left: 3px solid var(--red); }
+.chain-step.pass { border-left: 3px solid var(--green); }
+.chain-icon {
+  width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 700; font-size: 13px;
+}
+.chain-step.pass .chain-icon { background: rgba(74, 222, 128, .15); color: var(--green); }
+.chain-step.fail .chain-icon { background: rgba(248, 113, 113, .15); color: var(--red); }
+.chain-step .title { font-family: var(--mono); font-size: 13px; color: var(--text); }
+.chain-step .desc { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.chain-step .verdict { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 5px; font-weight: 600; }
+.chain-step.pass .verdict { background: rgba(74, 222, 128, .15); color: var(--green); }
+.chain-step.fail .verdict { background: rgba(248, 113, 113, .15); color: var(--red); }
+
+/* ---- signals grid ---- */
+.signals { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.signal {
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px;
+  padding: 22px;
+}
+.signal .head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.signal .nx { font-family: var(--mono); color: var(--accent); font-size: 13px; font-weight: 600; }
+.signal .nm { font-size: 16px; font-weight: 600; }
+.signal .body { color: var(--muted); font-size: 14px; }
+.signal .body .code-ref { font-family: var(--mono); color: var(--text); font-size: 12px; background: var(--bg-elev-2); padding: 2px 6px; border-radius: 3px; }
+
+/* ---- table ---- */
+table { width: 100%; border-collapse: collapse; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: var(--bg-elev-2); font-weight: 600; color: var(--text); font-size: 13px; letter-spacing: 0.02em; text-transform: uppercase; font-size: 11px; color: var(--muted); }
+td { color: var(--text); font-size: 14px; }
+td.mono, th.mono { font-family: var(--mono); font-size: 13px; }
+td.num { font-family: var(--mono); text-align: right; }
+td .status { font-family: var(--mono); font-size: 12px; padding: 3px 9px; border-radius: 4px; font-weight: 600; }
+td .status.ok { background: rgba(74, 222, 128, .15); color: var(--green); }
+td .status.pending { background: rgba(96, 165, 250, .15); color: var(--blue); }
+tr:last-child td { border-bottom: none; }
+
+/* ---- timeline ---- */
+.timeline { position: relative; padding-left: 32px; }
+.timeline::before { content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 2px; background: var(--border); }
+.tl-item { position: relative; padding-bottom: 22px; padding-left: 8px; }
+.tl-item::before { content: ""; position: absolute; left: -28px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg-elev); border: 2px solid var(--accent); }
+.tl-item.pending::before { border-color: var(--dim); }
+.tl-item h4 { font-size: 15px; font-weight: 600; margin: 0 0 4px; color: var(--text); }
+.tl-item h4 .when { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-right: 10px; padding: 2px 7px; background: var(--accent-soft); border-radius: 4px; }
+.tl-item .desc { color: var(--muted); font-size: 13px; }
+
+/* ---- reconcile panel ---- */
+.recon { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-top: 18px; }
+.recon-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: center; }
+.recon-side h5 { margin: 0 0 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.recon-side .num { font-family: var(--mono); font-size: 32px; color: var(--text); font-weight: 600; }
+.recon-side .sub { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 2px; }
+.recon-eq {
+  text-align: center; font-family: var(--mono); font-size: 22px; color: var(--green);
+  padding: 16px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin: 18px 0;
+}
+.recon .recon-meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-family: var(--mono); flex-wrap: wrap; gap: 10px; }
+.recon .recon-meta b { color: var(--green); font-weight: 600; }
+
+/* ---- callout ---- */
+.callout {
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px;
+  border-left: 3px solid var(--accent); padding: 18px 22px; margin: 22px 0; color: var(--muted); font-size: 14px;
+}
+.callout strong { color: var(--text); }
+
+/* ---- footer ---- */
+footer { padding: 56px 0 80px; border-top: 1px solid var(--border-soft); color: var(--muted); font-size: 13px; }
+footer .ft-cols { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 36px; margin-bottom: 36px; }
+footer h6 { font-size: 11px; color: var(--text); text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 14px; font-weight: 600; }
+footer ul { list-style: none; padding: 0; margin: 0; }
+footer li { margin-bottom: 8px; font-size: 13px; }
+footer a { color: var(--muted); border-bottom: none; }
+footer a:hover { color: var(--text); }
+footer .ft-bottom { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--dim); border-top: 1px solid var(--border-soft); padding-top: 24px; }
+footer .built { font-family: var(--mono); }
+
+@media (max-width: 820px) {
+  .hero h1 { font-size: 36px; }
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .signals { grid-template-columns: 1fr; }
+  .bar-row { grid-template-columns: 130px 1fr 80px; }
+  .arch-cells.r-6 { grid-template-columns: repeat(2, 1fr); }
+  .arch-cells.r-3 { grid-template-columns: 1fr; }
+  .arch-row { flex-direction: column; gap: 12px; }
+  .arch-label { border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 8px; }
+  .recon-rows { grid-template-columns: 1fr; }
+  footer .ft-cols { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="container">
+    <div class="brand">oss-pulse<span class="dot">.</span></div>
+    <div class="nav">
+      <a href="#architecture">Architecture</a>
+      <a href="#findings">Findings</a>
+      <a href="#incident">Incident</a>
+      <a href="#signals">Signals</a>
+      <a href="#adr">ADRs</a>
+      <a href="https://github.com/MistFall-Wang/oss-pulse" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="container">
+    <div class="kicker">Portfolio · Senior Data Engineering</div>
+    <h1>OSS Pulse<br><span class="grad">a GitHub activity lakehouse</span> with every senior-DE signal in its bones.</h1>
+    <p class="lede">
+      End-to-end medallion architecture on Delta + dbt + Spark + Airflow. 613,876 events through Bronze → Silver → Gold,
+      gated by 18 data-quality checks at every layer boundary, with a real deliberately-induced incident, a postmortem,
+      a performance tuning report that includes an honest negative result, and a streaming MVP that reconciled
+      181,221 events against batch with <strong style="color:var(--green)">zero row delta</strong>.
+    </p>
+
+    <div class="cta">
+      <a class="primary" href="https://github.com/MistFall-Wang/oss-pulse" target="_blank" rel="noopener">View on GitHub →</a>
+      <a class="secondary" href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/PROJECT_PLAN.md" target="_blank" rel="noopener">Read the master plan</a>
+      <a class="secondary" href="https://github.com/MistFall-Wang/oss-pulse/tree/main/docs/adr" target="_blank" rel="noopener">All ADRs</a>
+    </div>
+
+    <div class="badges">
+      <span class="badge">PySpark 3.5</span>
+      <span class="badge">Delta Lake 3.2</span>
+      <span class="badge">dbt-spark 1.9</span>
+      <span class="badge">Airflow 2.10</span>
+      <span class="badge">Redpanda (Kafka API)</span>
+      <span class="badge">Terraform · S3 · IAM · KMS</span>
+      <span class="badge">GitHub Actions CI</span>
+      <span class="badge">JDK 17</span>
+      <span class="badge">uv · ruff · pytest</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================ at a glance ============================================ -->
+<section id="glance">
+  <div class="container">
+    <h2><span class="num">01</span>At a glance</h2>
+    <p class="section-lede">Concrete numbers from the project's current state, all reproducible from the scripts in <code>spark/jobs/</code> and the dbt models.</p>
+
+    <div class="kpis">
+      <div class="kpi">
+        <div class="v">613,876</div>
+        <div class="l">Bronze events</div>
+        <div class="sub">across 4 ingest_hour partitions</div>
+      </div>
+      <div class="kpi">
+        <div class="v">11</div>
+        <div class="l">Delta tables</div>
+        <div class="sub">1 Bronze + 6 Silver + 3 Gold + 1 streaming</div>
+      </div>
+      <div class="kpi">
+        <div class="v">100+</div>
+        <div class="l">dbt schema tests</div>
+        <div class="sub">all pass on every build</div>
+      </div>
+      <div class="kpi">
+        <div class="v">18</div>
+        <div class="l">DQ gates</div>
+        <div class="sub">across bronze · silver · gold · cross-mart</div>
+      </div>
+      <div class="kpi">
+        <div class="v">7</div>
+        <div class="l">Accepted ADRs</div>
+        <div class="sub">every irreversible decision documented</div>
+      </div>
+      <div class="kpi">
+        <div class="v">5</div>
+        <div class="l">Runbooks</div>
+        <div class="sub">backfill, schema-change, data-missing, airflow, cloud</div>
+      </div>
+      <div class="kpi">
+        <div class="v">1</div>
+        <div class="l">Postmortem</div>
+        <div class="sub">deliberately-induced schema break, 5 Whys</div>
+      </div>
+      <div class="kpi">
+        <div class="v" style="color: var(--green)">0.0000%</div>
+        <div class="l">Reconcile delta</div>
+        <div class="sub">batch ↔ streaming on 181,221 events</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ architecture ============================================ -->
+<section id="architecture">
+  <div class="container">
+    <h2><span class="num">02</span>Architecture</h2>
+    <p class="section-lede">
+      Medallion: raw GH Archive JSON.gz → Bronze (idempotent MERGE on event_id, ADR-0002, partitioned by ingest_hour, ADR-0003) →
+      6 typed Silver tables built on demand (ADR-0005) → 3 Gold marts. A parallel streaming branch replays one hour to Redpanda
+      and writes into <code>silver_streaming</code> for batch/streaming reconciliation.
+    </p>
+
+    <div class="arch">
+      <div class="arch-row">
+        <div class="arch-label">raw</div>
+        <div class="arch-cells r-1">
+          <div class="cell raw">
+            <div class="nm">data/raw/*.json.gz</div>
+            <div class="ct">267<span class="unit"> MB · 4 hours</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="arrow">↓</div>
+
+      <div class="arch-row">
+        <div class="arch-label">bronze</div>
+        <div class="arch-cells r-1">
+          <div class="cell bronze">
+            <div class="nm">bronze.events — Delta, partitioned by ingest_hour, payload as raw JSON STRING (ADR-0001)</div>
+            <div class="ct">613,876<span class="unit"> rows · 453 MB (1.7× raw, ADR-0007)</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="arrow">↓</div>
+
+      <div class="arch-row">
+        <div class="arch-label">silver</div>
+        <div class="arch-cells r-6">
+          <div class="cell silver"><div class="nm">events_push</div><div class="ct">385,321</div></div>
+          <div class="cell silver"><div class="nm">events_pull_request</div><div class="ct">38,141</div></div>
+          <div class="cell silver"><div class="nm">events_issue_comment</div><div class="ct">27,989</div></div>
+          <div class="cell silver"><div class="nm">events_watch</div><div class="ct">27,097</div></div>
+          <div class="cell silver"><div class="nm">events_issues</div><div class="ct">11,786</div></div>
+          <div class="cell silver"><div class="nm">events_fork</div><div class="ct">7,062</div></div>
+        </div>
+      </div>
+      <div class="arrow">↓</div>
+
+      <div class="arch-row">
+        <div class="arch-label">gold</div>
+        <div class="arch-cells r-3">
+          <div class="cell gold">
+            <div class="nm">repo_daily_activity</div>
+            <div class="ct">162,719<span class="unit"> rows</span></div>
+          </div>
+          <div class="cell gold">
+            <div class="nm">oss_health_mart</div>
+            <div class="ct">30,107<span class="unit"> rows</span></div>
+          </div>
+          <div class="cell gold">
+            <div class="nm">bot_vs_human_activity_mart</div>
+            <div class="ct">199,416<span class="unit"> rows</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↳ streaming branch (Sprint 6 MVP)</div>
+
+      <div class="arch-row">
+        <div class="arch-label">streaming</div>
+        <div class="arch-cells r-3">
+          <div class="cell stream">
+            <div class="nm">replay.py → Redpanda topic</div>
+            <div class="ct">181,221<span class="unit"> msg · ~4 k msg/s</span></div>
+          </div>
+          <div class="cell stream">
+            <div class="nm">Structured Streaming consumer<br>foreachBatch + Delta MERGE</div>
+            <div class="ct">silver_streaming<span class="unit">.events_push</span></div>
+          </div>
+          <div class="cell stream">
+            <div class="nm">reconcile vs batch silver</div>
+            <div class="ct" style="color:var(--green)">+0 rows</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>Why this shape:</strong> every Silver model is built only when a Gold mart needs it (ADR-0005, demand-driven). Bronze stores
+      <code>payload</code> as a raw JSON STRING so a future upstream rename can't crash ingestion (ADR-0001, schema-drift containment).
+      Bronze, Silver, and Gold all use Delta MERGE on stable GitHub ids — there are no surrogate keys (ADR-0004).
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ findings ============================================ -->
+<section id="findings">
+  <div class="container">
+    <h2><span class="num">03</span>Findings from the data</h2>
+    <p class="section-lede">A few real-data findings that fell out of building the marts. Each is reproducible by running the named SQL or script.</p>
+
+    <h3>Bot vs human activity, by repo-day <span class="tag">bot_vs_human_activity_mart</span></h3>
+    <p style="color:var(--muted);font-size:14px;max-width:720px;">
+      Across 199,416 (repo, day) rows in the bot mart, the distribution is bimodal: most repo-days are entirely human
+      <em>or</em> entirely bot, with only a small "interesting tail" of mixed activity.
+    </p>
+
+    <div class="stacked">
+      <div class="s-human"  style="width: 65.6%">65.6 %  Pure human  (130,834)</div>
+      <div class="s-bot"    style="width: 32.0%">32.0 %  Pure bot  (63,924)</div>
+      <div class="s-mixed"  style="width: 2.4%">2.3 %  Mixed</div>
+    </div>
+    <div class="stack-legend">
+      <span><span class="dot human"></span>Pure human (0 % bot)</span>
+      <span><span class="dot bot"></span>Pure bot (100 % bot)</span>
+      <span><span class="dot mixed"></span>Mixed (the tail)</span>
+    </div>
+
+    <div class="callout">
+      One third of repo-days are 100 % automated traffic. That's the headline interview talking point for the OSS-health story —
+      and it's what flagged that the original bot-rule proposal (Sprint 2.5 spike) needed a curated <code>known_bots.csv</code>
+      allowlist, not just the <code>[bot]</code> suffix.
+    </div>
+
+    <h3>Top bots by event count <span class="tag">spike output</span></h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="nm">github-actions[bot]</span>
+        <div class="bar-wrap"><div class="bar" style="width:100%">CI / Pages / release automation</div></div>
+        <span class="v">129,533</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">renovate[bot]</span>
+        <div class="bar-wrap"><div class="bar" style="width:5%">deps</div></div>
+        <span class="v">6,480</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">dependabot[bot]</span>
+        <div class="bar-wrap"><div class="bar" style="width:4.8%">deps</div></div>
+        <span class="v">6,203</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">pull[bot]</span>
+        <div class="bar-wrap"><div class="bar" style="width:3.5%">fork-sync</div></div>
+        <span class="v">4,491</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">swa-runner-app[bot]</span>
+        <div class="bar-wrap"><div class="bar" style="width:2.8%">azure SWA</div></div>
+        <span class="v">3,635</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">sonarqubecloud[bot]</span>
+        <div class="bar-wrap"><div class="bar" style="width:1%">code quality</div></div>
+        <span class="v">1,274</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">coderabbitai[bot]</span>
+        <div class="bar-wrap"><div class="bar" style="width:0.85%">PR review</div></div>
+        <span class="v">1,108</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">LombiqBot <em style="color:var(--accent);font-style:normal">[Rule C catch]</em></span>
+        <div class="bar-wrap"><div class="bar muted" style="width:1.35%">no [bot] suffix → needs allowlist</div></div>
+        <span class="v">1,752</span>
+      </div>
+    </div>
+
+    <h3>Top 10 multi-author repos on 2025-01-15 <span class="tag">repo_daily_activity</span></h3>
+    <p style="color:var(--muted);font-size:14px">Filtered to <code>unique_pushers ≥ 5</code> to surface real OSS projects, not single-actor automation.</p>
+    <table>
+      <thead><tr><th class="mono">repo_name</th><th class="mono">push_count</th><th class="mono">total_commits</th><th class="mono">unique_pushers</th><th class="mono">bot_push_count</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">NexusAILab/cdn</td><td class="num">131</td><td class="num">131</td><td class="num">5</td><td class="num">0</td></tr>
+        <tr><td class="mono">odoo-dev/odoo</td><td class="num">75</td><td class="num">2,428</td><td class="num">49</td><td class="num">0</td></tr>
+        <tr><td class="mono">LucasOtw/SAE3_Sco…</td><td class="num">69</td><td class="num">84</td><td class="num">7</td><td class="num">0</td></tr>
+        <tr><td class="mono">hmcts/cnp-flux-co…</td><td class="num">38</td><td class="num">42</td><td class="num">5</td><td class="num">0</td></tr>
+        <tr><td class="mono">demisto/content</td><td class="num">36</td><td class="num">394</td><td class="num">15</td><td class="num">6</td></tr>
+        <tr><td class="mono">ZrenKix/PROJ2024</td><td class="num">35</td><td class="num">236</td><td class="num">6</td><td class="num">0</td></tr>
+        <tr><td class="mono">grafana/grafana</td><td class="num">33</td><td class="num">593</td><td class="num">20</td><td class="num">2</td></tr>
+        <tr><td class="mono">Matteo-K/PACT</td><td class="num">32</td><td class="num">50</td><td class="num">5</td><td class="num">0</td></tr>
+        <tr><td class="mono">deckhouse/deckhouse</td><td class="num">30</td><td class="num">34</td><td class="num">13</td><td class="num">0</td></tr>
+        <tr><td class="mono">MarcusZ98/Racketeers</td><td class="num">29</td><td class="num">159</td><td class="num">7</td><td class="num">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================ streaming reconcile ============================================ -->
+<section id="streaming">
+  <div class="container">
+    <h2><span class="num">04</span>Batch ↔ streaming reconciliation</h2>
+    <p class="section-lede">
+      Sprint 6 MVP: replay one ingest hour of PushEvents to Redpanda, drain via Spark Structured Streaming + Delta MERGE into a parallel
+      <code>silver_streaming</code> table, then compare row-by-row to the batch Silver table for the same hour.
+    </p>
+
+    <div class="recon">
+      <div class="recon-rows">
+        <div class="recon-side">
+          <h5>Batch silver — events_push @ 2025-01-15-12</h5>
+          <div class="num">181,221</div>
+          <div class="sub">rows · ∑ commit_size = 576,167</div>
+        </div>
+        <div class="recon-side">
+          <h5>Streaming silver — events_push (drained)</h5>
+          <div class="num">181,221</div>
+          <div class="sub">rows · ∑ commit_size = 576,167</div>
+        </div>
+      </div>
+
+      <div class="recon-eq">batch  ≡  streaming    ·    Δ rows = +0   ·   Δ commits = +0   ·   orphan ids = 0/0</div>
+
+      <div class="recon-meta">
+        <span>threshold: <b>&lt; 0.01 %</b> · actual: <b>0.0000 %</b></span>
+        <span>idempotency: foreachBatch + Delta MERGE on <code>id</code></span>
+        <span>broker: 1× Redpanda v24.2.7 (Docker)</span>
+      </div>
+    </div>
+
+    <pre style="margin-top:18px"><span class="c"># reproduce:</span>
+docker-compose -f streaming/docker-compose.yml up -d
+uv run python -m streaming.replay    --source data/raw/2025-01-15-12.json.gz
+uv run python -m streaming.consumer
+uv run python -m streaming.reconcile --ingest-hour 2025-01-15-12</pre>
+  </div>
+</section>
+
+<!-- ============================================ incident ============================================ -->
+<section id="incident">
+  <div class="container">
+    <h2><span class="num">05</span>The deliberate incident drill</h2>
+    <p class="section-lede">
+      Sprint 5b: synthesize 200 PushEvent rows where <code>payload.size</code> was renamed to <code>payload.commit_count</code>,
+      ingest as a new <code>ingest_hour</code>, and watch where each gate in the pipeline actually catches it.
+      The point of the drill is not the bug — it's discovering where the <em>detection</em> happens, and what's silently
+      poisoned in between.
+    </p>
+
+    <h3>Detection chain — what actually fired (and what didn't)</h3>
+    <div class="chain">
+      <div class="chain-step pass">
+        <div class="chain-icon">1</div>
+        <div>
+          <div class="title">bronze_ingest</div>
+          <div class="desc">Bronze stores <code>payload</code> as raw JSON STRING (ADR-0001). The rename is invisible at this layer — by design.</div>
+        </div>
+        <div class="verdict">pass</div>
+      </div>
+      <div class="chain-step pass">
+        <div class="chain-icon">2</div>
+        <div>
+          <div class="title">gate_bronze (4 DQ checks)</div>
+          <div class="desc">id-uniqueness, type-in-set, public-flag, created_at-not-null all still hold; nothing checks payload contents at Bronze.</div>
+        </div>
+        <div class="verdict">pass</div>
+      </div>
+      <div class="chain-step pass">
+        <div class="chain-icon">3</div>
+        <div>
+          <div class="title">silver build — events_push</div>
+          <div class="desc"><code>get_json_object(payload_raw, '$.size')</code> silently returns NULL on the 200 rows. The SELECT projects NULL successfully.</div>
+        </div>
+        <div class="verdict">pass</div>
+      </div>
+      <div class="chain-step pass">
+        <div class="chain-icon">4</div>
+        <div>
+          <div class="title">gate_silver (row-count match)</div>
+          <div class="desc">Silver row count still equals Bronze filtered by type — NULLs count as rows. The contents-check this gate was missing is added below.</div>
+        </div>
+        <div class="verdict">pass</div>
+      </div>
+      <div class="chain-step fail">
+        <div class="chain-icon">5</div>
+        <div>
+          <div class="title">dbt test — not_null_events_push_commit_size</div>
+          <div class="desc"><strong style="color:var(--text)">Got 200 results, configured to fail if != 0.</strong> Detected — but only after Silver finished and (in a real DAG) Gold marts had already consumed the bad data.</div>
+        </div>
+        <div class="verdict">fail</div>
+      </div>
+    </div>
+
+    <h3>Root cause and what changed <span class="tag">postmortem 0001</span></h3>
+    <div class="callout">
+      <strong>It's a gate-placement problem, not a missing-test problem.</strong>
+      The dbt schema test does catch it — but it runs at the end of the pipeline, after Gold is already poisoned. The fix was two-part:
+      a one-line <code>coalesce(size, commit_count)</code> in <code>events_push.sql</code>, plus a new
+      <code>silver_commit_size_not_null</code> gate in <code>quality/checks.py</code> that moves detection between Silver and Gold,
+      where it belongs. Every postmortem must leave behind a regression check — otherwise it's theatre.
+    </div>
+
+    <p style="font-size:14px;color:var(--muted)">
+      Full 5 Whys and lessons in
+      <a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/postmortems/0001-schema-drift.md" target="_blank" rel="noopener">docs/postmortems/0001-schema-drift.md</a>.
+    </p>
+  </div>
+</section>
+
+<!-- ============================================ performance ============================================ -->
+<section id="performance">
+  <div class="container">
+    <h2><span class="num">06</span>Performance — and the honest negative result</h2>
+    <p class="section-lede">
+      Hypothesis: <code>OPTIMIZE … ZORDER BY (type)</code> on Bronze would prune per-type filter reads in every Silver build.
+      Result: it didn't. The wall-clock improvement that showed up at first was JIT warmup, not data-skipping. Recording the
+      finding honestly is what makes the experiment defensible at interview.
+    </p>
+
+    <h3>Per-type filter wall-clock</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="nm">events_push <em style="color:var(--dim)">before</em></span>
+        <div class="bar-wrap"><div class="bar" style="width:100%">2.73 s, 4 files read</div></div>
+        <span class="v">2.73 s</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">events_push <em style="color:var(--accent);font-style:normal">after</em></span>
+        <div class="bar-wrap"><div class="bar green" style="width:32.6%">0.89 s — 4 files still read (no actual prune)</div></div>
+        <span class="v">0.89 s</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">Full Silver build <em style="color:var(--dim)">before</em></span>
+        <div class="bar-wrap"><div class="bar" style="width:97%">37.36 s · dominated by dbt cold-start + merge overhead</div></div>
+        <span class="v">37.36 s</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">Full Silver build <em style="color:var(--accent);font-style:normal">after</em></span>
+        <div class="bar-wrap"><div class="bar" style="width:100%">38.34 s · no net change</div></div>
+        <span class="v">38.34 s</span>
+      </div>
+    </div>
+
+    <h3>Storage cost of OPTIMIZE — and why VACUUM matters</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="nm">Bronze before OPTIMIZE</span>
+        <div class="bar-wrap"><div class="bar blue" style="width:50%">4 files · 465 MB</div></div>
+        <span class="v">465 MB</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">After OPTIMIZE (pre-VACUUM)</span>
+        <div class="bar-wrap"><div class="bar" style="width:100%">8 files · 931 MB <strong style="color:#1a1305">— 2× temporary storage</strong></div></div>
+        <span class="v">931 MB</span>
+      </div>
+      <div class="bar-row">
+        <span class="nm">After VACUUM (retention 0h, dev only)</span>
+        <div class="bar-wrap"><div class="bar green" style="width:50%">4 files · 466 MB</div></div>
+        <span class="v">466 MB</span>
+      </div>
+    </div>
+
+    <div class="callout">
+      Root cause for the no-op result: our Bronze has 4 files (one per <code>ingest_hour</code>). ZORDER can re-arrange rows
+      <em>within</em> a file but can't split below the file granularity — so the smallest skip-unit was 25 % of the table.
+      At 100× scale, this experiment is worth repeating. The doubling-then-VACUUM finding is the empirical reason ADR-0009
+      (compact-daily, vacuum-weekly with 168h retention) goes from aspirational to mandatory.
+      <br><br>
+      <a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/performance/sprint5b_tuning.md" target="_blank" rel="noopener">Full 5-dimension report →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ signals ============================================ -->
+<section id="signals">
+  <div class="container">
+    <h2><span class="num">07</span>The seven senior signals — where each one lives</h2>
+    <p class="section-lede">
+      The project's north star: every Sprint reinforces at least one of these. Each card below names the artifact that proves it,
+      so an interviewer can ask "show me" instead of trusting the claim.
+    </p>
+
+    <div class="signals">
+      <div class="signal">
+        <div class="head"><span class="nx">01</span><span class="nm">Idempotency</span></div>
+        <div class="body">Bronze + Silver + Gold all MERGE on natural ids. Cross-layer invariant <code>count(*) == count(distinct id)</code> enforced by 3 runtime <span class="code-ref">spark/jobs/gold_*_verify.py</span> scripts.</div>
+      </div>
+      <div class="signal">
+        <div class="head"><span class="nx">02</span><span class="nm">Backfill / replay</span></div>
+        <div class="body">Airflow DAG <code>params.start_hour</code> / <code>end_hour</code>. <span class="code-ref">docs/runbooks/backfill.md</span> documents Airflow and shell-only invocation paths.</div>
+      </div>
+      <div class="signal">
+        <div class="head"><span class="nx">03</span><span class="nm">Schema-drift tolerance</span></div>
+        <div class="body">ADR-0001 puts payload as raw JSON STRING in Bronze, then ADR-0005 has Silver parse on demand. <span class="code-ref">postmortems/0001-schema-drift.md</span> is the empirical proof under a real injected break.</div>
+      </div>
+      <div class="signal">
+        <div class="head"><span class="nx">04</span><span class="nm">Data-quality gates</span></div>
+        <div class="body">18 checks in <span class="code-ref">quality/runner.py</span> across 4 suites; each suite exits non-zero to gate the next Airflow task. Lightweight on purpose — design trade-off vs full GE documented in checks.py.</div>
+      </div>
+      <div class="signal">
+        <div class="head"><span class="nx">05</span><span class="nm">Perf tuning report</span></div>
+        <div class="body">5-dimension before/after measurement with an honest negative result and a per-finding follow-up plan in <span class="code-ref">docs/performance/sprint5b_tuning.md</span>.</div>
+      </div>
+      <div class="signal">
+        <div class="head"><span class="nx">06</span><span class="nm">Batch + streaming story</span></div>
+        <div class="body">Redpanda + replay + Structured Streaming + reconcile script in <span class="code-ref">streaming/</span>. 181,221 events reconciled to zero delta.</div>
+      </div>
+      <div class="signal" style="grid-column: span 2">
+        <div class="head"><span class="nx">07</span><span class="nm">Operational docs</span></div>
+        <div class="body">7 accepted ADRs + 5 runbooks + 1 postmortem + 3 mart design docs + 1 spike report. Every decision that was made on purpose has a paper trail.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ ADR registry ============================================ -->
+<section id="adr">
+  <div class="container">
+    <h2><span class="num">08</span>ADR registry</h2>
+    <p class="section-lede">
+      Every irreversible decision (storage format, partition strategy, primary key, bot rule…) gets an Architecture Decision Record
+      with context, alternatives rejected, and revisit conditions. Format: MADR-lite.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="mono" style="width:50px">#</th>
+          <th class="mono">Title</th>
+          <th class="mono" style="width:170px">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">0001</td><td><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/adr/0001-payload-handling.md" target="_blank" rel="noopener">Bronze payload as raw JSON STRING + bounded probe</a></td><td><span class="status ok">Accepted</span></td></tr>
+        <tr><td class="mono">0002</td><td><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/adr/0002-event-id-idempotency.md" target="_blank" rel="noopener">event_id as sole idempotency key</a></td><td><span class="status ok">Accepted</span></td></tr>
+        <tr><td class="mono">0003</td><td><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/adr/0003-partition-by-ingest-hour.md" target="_blank" rel="noopener">Partition by ingest_hour, ZORDER by created_at</a></td><td><span class="status ok">Accepted</span></td></tr>
+        <tr><td class="mono">0004</td><td><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/adr/0004-no-surrogate-keys.md" target="_blank" rel="noopener">No surrogate keys; use GitHub source ids directly</a></td><td><span class="status ok">Accepted</span></td></tr>
+        <tr><td class="mono">0005</td><td><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/adr/0005-silver-build-strategy.md" target="_blank" rel="noopener">Silver build strategy (tiered, demand-driven) + dbt adapter swap plan</a></td><td><span class="status ok">Accepted</span></td></tr>
+        <tr><td class="mono">0006</td><td><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/adr/0006-bot-identification.md" target="_blank" rel="noopener">Bot rule: Rule A (suffix) + Rule C (allowlist) + event-level is_app_event</a></td><td><span class="status ok">Accepted</span></td></tr>
+        <tr><td class="mono">0007</td><td><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/adr/0007-bronze-storage-overhead.md" target="_blank" rel="noopener">Bronze storage overhead — 1.7× raw .json.gz, planning constants</a></td><td><span class="status ok">Accepted</span></td></tr>
+        <tr><td class="mono">0008</td><td>Streaming time semantics (event vs processing time)</td><td><span class="status pending">Sprint 7 (optional)</span></td></tr>
+        <tr><td class="mono">0009</td><td>OPTIMIZE / VACUUM cadence — preview captured in sprint5b_tuning.md</td><td><span class="status pending">Sprint 9 (optional)</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================ timeline ============================================ -->
+<section id="timeline">
+  <div class="container">
+    <h2><span class="num">09</span>Sprint timeline</h2>
+    <p class="section-lede">Original 6-week estimate revised to a realistic 8–10 weeks. Streaming was de-scoped from a 4-week build to a 1-week MVP that ships the talking point.</p>
+
+    <div class="timeline">
+      <div class="tl-item">
+        <h4><span class="when">Sprint 0</span>Schema discovery + ADR-0001</h4>
+        <div class="desc">Cross-year sample (2015 / 2018 / 2025): top-level envelope stable for 10 years; IssueCommentEvent nested paths grew 120 → 309. Drives Bronze payload-handling decision.</div>
+      </div>
+      <div class="tl-item">
+        <h4><span class="when">Sprint 1</span>Bronze ingestion + first Silver</h4>
+        <div class="desc">PySpark + Delta MERGE on event_id; first Silver model <code>events_push</code> via dbt-spark; ADR-0002 and ADR-0003 codified. 613,876 Bronze rows, 0 duplicates.</div>
+      </div>
+      <div class="tl-item">
+        <h4><span class="when">Sprint 2 + 2.5</span>First Gold mart + bot-heuristic spike</h4>
+        <div class="desc"><code>repo_daily_activity</code> (162,719 rows, composite-key MERGE). Spike proved the original Rule B (payload.performed_via_github_app) was at the wrong path; would have broken Sprint 3 if not caught.</div>
+      </div>
+      <div class="tl-item">
+        <h4><span class="when">Sprint 3</span>2 more marts + 5 more Silver tables</h4>
+        <div class="desc"><code>oss_health_mart</code> + <code>bot_vs_human_activity_mart</code>; ADR-0006 codifies Rule A + Rule C + is_app_event; <code>is_bot()</code> macro centralises classification; cross-mart verifier promoted to a quality gate.</div>
+      </div>
+      <div class="tl-item">
+        <h4><span class="when">Sprint 4</span>DQ gates + Airflow + runbooks</h4>
+        <div class="desc">Lightweight <code>quality/</code> framework (intentionally not full GE — trade-off documented); parameterized Airflow DAG; runbooks for backfill, schema-change, data-missing, and airflow-setup.</div>
+      </div>
+      <div class="tl-item">
+        <h4><span class="when">Sprint 5b</span>CI + perf report + ADR-0007 + postmortem-0001</h4>
+        <div class="desc">GitHub Actions on PR (ruff, pytest, dbt parse). Deliberately-induced schema break, full detection-chain documentation, regression check added to silver gate.</div>
+      </div>
+      <div class="tl-item">
+        <h4><span class="when">Sprint 5a</span>Terraform + cloud-migration runbook  <em style="color:var(--accent);font-style:normal;font-family:var(--mono);font-size:11px">code-complete</em></h4>
+        <div class="desc">S3 (3 buckets, KMS-encrypted, lifecycle-tiered) + cross-account IAM for Databricks workers. Apply requires AWS account + Databricks Free Edition signup (user-side step).</div>
+      </div>
+      <div class="tl-item">
+        <h4><span class="when">Sprint 6</span>Streaming MVP</h4>
+        <div class="desc">Redpanda + replay.py + Structured Streaming consumer + reconcile.py. 181,221 events end-to-end with 0 row delta.</div>
+      </div>
+      <div class="tl-item pending">
+        <h4><span class="when">Sprint 7-9</span>Streaming production-grade  <em style="color:var(--muted);font-style:normal;font-family:var(--mono);font-size:11px">backlog</em></h4>
+        <div class="desc">Time-warped replay, watermark-based late-event handling, continuous reconciliation, ADR-0008 + 0009, real-dollar cost report. Triggered only by job-market signal.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ how to run ============================================ -->
+<section id="run">
+  <div class="container">
+    <h2><span class="num">10</span>Run it locally</h2>
+    <p class="section-lede">Requires JDK 17 (Spark 3.5 / Hadoop 3.3.4 break on Java 18+ due to <code>Subject.getSubject</code> removal). Tested on Amazon Corretto 17.</p>
+
+<pre><span class="c"># Setup</span>
+<span class="k">git</span> clone https<span class="s">://</span>github.com<span class="s">/</span>MistFall-Wang<span class="s">/</span>oss-pulse <span class="o">&amp;&amp;</span> <span class="k">cd</span> oss-pulse
+uv sync
+<span class="k">export</span> JAVA_HOME=<span class="s">/Library/Java/JavaVirtualMachines/amazon-corretto-17.jdk/Contents/Home</span>
+<span class="k">export</span> PATH=<span class="s">"$JAVA_HOME/bin:$PATH"</span>
+<span class="k">export</span> PYSPARK_SUBMIT_ARGS=<span class="s">"--driver-memory 4g pyspark-shell"</span>
+
+<span class="c"># End-to-end on one ingest hour</span>
+uv run python -m spark.jobs.bronze_ingest --source data/raw/2025-01-15-12.json.gz --bronze-path data/bronze/events
+uv run python -m quality.runner --layer bronze
+<span class="k">cd</span> dbt <span class="o">&amp;&amp;</span> uv run dbt deps <span class="o">&amp;&amp;</span> uv run dbt run --select silver <span class="o">&amp;&amp;</span> <span class="k">cd</span> ..
+uv run python -m quality.runner --layer silver
+<span class="k">cd</span> dbt <span class="o">&amp;&amp;</span> uv run dbt run --select gold <span class="o">&amp;&amp;</span> <span class="k">cd</span> ..
+uv run python -m quality.runner --layer gold
+uv run python -m quality.runner --layer cross_mart
+<span class="k">cd</span> dbt <span class="o">&amp;&amp;</span> uv run dbt test
+
+<span class="c"># Cross-layer verifiers (ground truth on the busiest rows)</span>
+uv run python -m spark.jobs.gold_verify
+uv run python -m spark.jobs.gold_health_verify
+uv run python -m spark.jobs.gold_bot_verify
+
+<span class="c"># Streaming MVP</span>
+docker-compose -f streaming/docker-compose.yml up -d
+uv run python -m streaming.replay --source data/raw/2025-01-15-12.json.gz
+uv run python -m streaming.consumer
+uv run python -m streaming.reconcile --ingest-hour 2025-01-15-12
+
+<span class="c"># Deliberate incident drill (Sprint 5b)</span>
+uv run python -m spark.jobs.incident_inject
+<span class="c"># ... observe gates ...</span>
+uv run python -m spark.jobs.incident_inject --cleanup
+</pre>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="ft-cols">
+      <div>
+        <h6>OSS Pulse</h6>
+        <p style="margin-top:0">A production-grade GitHub activity lakehouse built on the GH Archive dataset. End-to-end medallion architecture demonstrating ingestion, schema-drift tolerance, idempotency, data quality, performance tuning, and batch–streaming reconciliation.</p>
+      </div>
+      <div>
+        <h6>Project</h6>
+        <ul>
+          <li><a href="https://github.com/MistFall-Wang/oss-pulse" target="_blank" rel="noopener">Repository</a></li>
+          <li><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/README.md" target="_blank" rel="noopener">README</a></li>
+          <li><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/PROJECT_PLAN.md" target="_blank" rel="noopener">Master plan</a></li>
+          <li><a href="https://github.com/MistFall-Wang/oss-pulse/tree/main/docs/adr" target="_blank" rel="noopener">ADRs</a></li>
+          <li><a href="https://github.com/MistFall-Wang/oss-pulse/tree/main/docs/runbooks" target="_blank" rel="noopener">Runbooks</a></li>
+          <li><a href="https://github.com/MistFall-Wang/oss-pulse/blob/main/docs/postmortems/0001-schema-drift.md" target="_blank" rel="noopener">Postmortem 0001</a></li>
+        </ul>
+      </div>
+      <div>
+        <h6>Built with</h6>
+        <ul>
+          <li><a href="https://spark.apache.org/" target="_blank" rel="noopener">Apache Spark 3.5</a></li>
+          <li><a href="https://delta.io/" target="_blank" rel="noopener">Delta Lake 3.2</a></li>
+          <li><a href="https://www.getdbt.com/" target="_blank" rel="noopener">dbt 1.9</a></li>
+          <li><a href="https://airflow.apache.org/" target="_blank" rel="noopener">Airflow 2.10</a></li>
+          <li><a href="https://redpanda.com/" target="_blank" rel="noopener">Redpanda</a></li>
+          <li><a href="https://www.terraform.io/" target="_blank" rel="noopener">Terraform</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="ft-bottom">
+      <span>Peter Wang · portfolio for Canadian Senior Data Engineer roles</span>
+      <span class="built">$ git log --oneline | wc -l → 13</span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
