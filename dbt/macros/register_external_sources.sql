@@ -10,19 +10,29 @@
 #}
 {% macro register_external_sources() %}
     {% if execute %}
-        {% set sources_to_register = [
-            ('bronze', 'events', var('bronze_events_path', none)),
-        ] %}
+        {#- CI target runs `dbt parse` / `dbt compile` without a real
+            warehouse and without Delta jars on the Spark classpath. The
+            CREATE TABLE ... USING DELTA below would raise
+            ClassNotFoundException: DELTA.DefaultSource there. Skip the
+            hook on CI; we only need it for dev/prod where ref() resolves
+            against a real Bronze table. -#}
+        {% if target.name == 'ci' %}
+            {{ log("[register_external_sources] skipped on CI target", info=True) }}
+        {% else %}
+            {% set sources_to_register = [
+                ('bronze', 'events', var('bronze_events_path', none)),
+            ] %}
 
-        {% for source_name, table_name, path in sources_to_register %}
-            {% if path %}
-                {% do run_query("CREATE SCHEMA IF NOT EXISTS " ~ source_name) %}
-                {% do run_query(
-                    "CREATE TABLE IF NOT EXISTS " ~ source_name ~ "." ~ table_name ~
-                    " USING DELTA LOCATION '" ~ path ~ "'"
-                ) %}
-                {{ log("[register_external_sources] registered " ~ source_name ~ "." ~ table_name ~ " -> " ~ path, info=True) }}
-            {% endif %}
-        {% endfor %}
+            {% for source_name, table_name, path in sources_to_register %}
+                {% if path %}
+                    {% do run_query("CREATE SCHEMA IF NOT EXISTS " ~ source_name) %}
+                    {% do run_query(
+                        "CREATE TABLE IF NOT EXISTS " ~ source_name ~ "." ~ table_name ~
+                        " USING DELTA LOCATION '" ~ path ~ "'"
+                    ) %}
+                    {{ log("[register_external_sources] registered " ~ source_name ~ "." ~ table_name ~ " -> " ~ path, info=True) }}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
     {% endif %}
 {% endmacro %}
