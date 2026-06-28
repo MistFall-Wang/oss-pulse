@@ -32,6 +32,7 @@ def build_spark() -> SparkSession:
     # spark.driver.memory in the builder is ignored for local[*] once the
     # JVM is up; the env var is the only reliable lever in session mode.
     import os
+
     args = os.environ.get("PYSPARK_SUBMIT_ARGS", "")
     if "--driver-memory" not in args:
         os.environ["PYSPARK_SUBMIT_ARGS"] = (
@@ -54,8 +55,10 @@ def build_spark() -> SparkSession:
 
 
 def run_bronze(spark: SparkSession) -> list[checks.CheckResult]:
-    bronze = spark.read.format("delta").load(BRONZE_PATH).select(
-        "id", "type", "created_at", "is_public"
+    bronze = (
+        spark.read.format("delta")
+        .load(BRONZE_PATH)
+        .select("id", "type", "created_at", "is_public")
     )
     # Selecting only the columns we need keeps payload_raw out of the
     # driver heap on distinct/aggregate operations.
@@ -72,17 +75,32 @@ def run_silver(spark: SparkSession) -> list[checks.CheckResult]:
     push = spark.read.format("delta").load(f"{SILVER_WAREHOUSE}/events_push")
     pr = spark.read.format("delta").load(f"{SILVER_WAREHOUSE}/events_pull_request")
     issues = spark.read.format("delta").load(f"{SILVER_WAREHOUSE}/events_issues")
-    comments = spark.read.format("delta").load(f"{SILVER_WAREHOUSE}/events_issue_comment")
+    comments = spark.read.format("delta").load(
+        f"{SILVER_WAREHOUSE}/events_issue_comment"
+    )
     watch = spark.read.format("delta").load(f"{SILVER_WAREHOUSE}/events_watch")
     fork = spark.read.format("delta").load(f"{SILVER_WAREHOUSE}/events_fork")
     results = [
-        checks.silver_row_count_matches_bronze(push,     bronze, "PushEvent",         "events_push"),
-        checks.silver_row_count_matches_bronze(pr,       bronze, "PullRequestEvent",  "events_pull_request"),
-        checks.silver_row_count_matches_bronze(issues,   bronze, "IssuesEvent",       "events_issues"),
-        checks.silver_row_count_matches_bronze(comments, bronze, "IssueCommentEvent", "events_issue_comment"),
-        checks.silver_row_count_matches_bronze(watch,    bronze, "WatchEvent",        "events_watch"),
-        checks.silver_row_count_matches_bronze(fork,     bronze, "ForkEvent",         "events_fork"),
+        checks.silver_row_count_matches_bronze(
+            push, bronze, "PushEvent", "events_push"
+        ),
+        checks.silver_row_count_matches_bronze(
+            pr, bronze, "PullRequestEvent", "events_pull_request"
+        ),
+        checks.silver_row_count_matches_bronze(
+            issues, bronze, "IssuesEvent", "events_issues"
+        ),
+        checks.silver_row_count_matches_bronze(
+            comments, bronze, "IssueCommentEvent", "events_issue_comment"
+        ),
+        checks.silver_row_count_matches_bronze(
+            watch, bronze, "WatchEvent", "events_watch"
+        ),
+        checks.silver_row_count_matches_bronze(
+            fork, bronze, "ForkEvent", "events_fork"
+        ),
         checks.silver_pr_state_in_known(pr),
+        checks.silver_commit_size_not_null(push),
     ]
     bronze.unpersist()
     return results
@@ -91,11 +109,19 @@ def run_silver(spark: SparkSession) -> list[checks.CheckResult]:
 def run_gold(spark: SparkSession) -> list[checks.CheckResult]:
     activity = spark.read.format("delta").load(f"{GOLD_WAREHOUSE}/repo_daily_activity")
     health = spark.read.format("delta").load(f"{GOLD_WAREHOUSE}/oss_health_mart")
-    bot = spark.read.format("delta").load(f"{GOLD_WAREHOUSE}/bot_vs_human_activity_mart")
+    bot = spark.read.format("delta").load(
+        f"{GOLD_WAREHOUSE}/bot_vs_human_activity_mart"
+    )
     return [
-        checks.gold_grain_unique(activity, ("repo_id", "activity_date"), "repo_daily_activity"),
-        checks.gold_grain_unique(health,   ("repo_id", "activity_date"), "oss_health_mart"),
-        checks.gold_grain_unique(bot,      ("repo_id", "activity_date"), "bot_vs_human_activity_mart"),
+        checks.gold_grain_unique(
+            activity, ("repo_id", "activity_date"), "repo_daily_activity"
+        ),
+        checks.gold_grain_unique(
+            health, ("repo_id", "activity_date"), "oss_health_mart"
+        ),
+        checks.gold_grain_unique(
+            bot, ("repo_id", "activity_date"), "bot_vs_human_activity_mart"
+        ),
         checks.gold_health_pr_merged_le_closed(health),
         checks.gold_bot_share_in_range(bot),
     ]
@@ -103,7 +129,9 @@ def run_gold(spark: SparkSession) -> list[checks.CheckResult]:
 
 def run_cross_mart(spark: SparkSession) -> list[checks.CheckResult]:
     activity = spark.read.format("delta").load(f"{GOLD_WAREHOUSE}/repo_daily_activity")
-    bot = spark.read.format("delta").load(f"{GOLD_WAREHOUSE}/bot_vs_human_activity_mart")
+    bot = spark.read.format("delta").load(
+        f"{GOLD_WAREHOUSE}/bot_vs_human_activity_mart"
+    )
     return [checks.cross_mart_bot_push_count_agrees(activity, bot)]
 
 
@@ -129,9 +157,7 @@ def main() -> None:
         print(r)
 
     failed = [r for r in results if not r.passed]
-    print(
-        f"\n[summary] {len(results) - len(failed)} passed, {len(failed)} failed"
-    )
+    print(f"\n[summary] {len(results) - len(failed)} passed, {len(failed)} failed")
 
     spark.stop()
     if failed:

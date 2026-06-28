@@ -72,7 +72,9 @@ for path in FILES:
         for line in fh:
             event = json.loads(line)
             id_to_hours[event["id"]].add(hour)
-cross_hour = {event_id: hours for event_id, hours in id_to_hours.items() if len(hours) > 1}
+cross_hour = {
+    event_id: hours for event_id, hours in id_to_hours.items() if len(hours) > 1
+}
 print(f"  IDs appearing in >1 hourly file: {len(cross_hour):,}")
 if cross_hour:
     sample = list(cross_hour.items())[:3]

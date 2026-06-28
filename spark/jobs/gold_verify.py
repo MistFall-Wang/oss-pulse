@@ -50,9 +50,7 @@ def main() -> None:
     silver = spark.read.format("delta").load(SILVER_PATH)
 
     total = gold.count()
-    unique_grain = (
-        gold.select("repo_id", "activity_date").distinct().count()
-    )
+    unique_grain = gold.select("repo_id", "activity_date").distinct().count()
 
     print("\n========== gold.repo_daily_activity verifier ==========")
     print(f"gold path:        {GOLD_PATH}")
@@ -93,17 +91,21 @@ def main() -> None:
         f"    bot_push_count = {busiest['bot_push_count']:,}"
     )
 
-    recomputed = silver.filter(
-        (F.col("repo_id") == repo_id)
-        & (F.to_date("created_at") == F.lit(activity_date))
-    ).agg(
-        F.count("*").alias("push_count"),
-        F.sum("commit_size").alias("total_commits"),
-        F.countDistinct("actor_id").alias("unique_pushers"),
-        F.sum(
-            F.when(F.col("actor_login").endswith("[bot]"), 1).otherwise(0)
-        ).alias("bot_push_count"),
-    ).collect()[0]
+    recomputed = (
+        silver.filter(
+            (F.col("repo_id") == repo_id)
+            & (F.to_date("created_at") == F.lit(activity_date))
+        )
+        .agg(
+            F.count("*").alias("push_count"),
+            F.sum("commit_size").alias("total_commits"),
+            F.countDistinct("actor_id").alias("unique_pushers"),
+            F.sum(F.when(F.col("actor_login").endswith("[bot]"), 1).otherwise(0)).alias(
+                "bot_push_count"
+            ),
+        )
+        .collect()[0]
+    )
 
     print(
         "\n[ground truth] silver recomputed for same key:\n"

@@ -83,12 +83,8 @@ def main() -> None:
 
     rule_a_events = flagged.filter("rule_a_login_suffix").count()
     rule_b_events = flagged.filter("rule_b_github_app").count()
-    either_events = flagged.filter(
-        "rule_a_login_suffix OR rule_b_github_app"
-    ).count()
-    both_events = flagged.filter(
-        "rule_a_login_suffix AND rule_b_github_app"
-    ).count()
+    either_events = flagged.filter("rule_a_login_suffix OR rule_b_github_app").count()
+    both_events = flagged.filter("rule_a_login_suffix AND rule_b_github_app").count()
 
     rule_a_actors = (
         flagged.filter("rule_a_login_suffix").select("actor_id").distinct().count()
@@ -119,10 +115,7 @@ def main() -> None:
     print(f"rule A actors:  {rule_a_actors:,}")
     print(f"rule B actors:  {rule_b_actors:,}")
     print(f"either actors:  {either_actors:,}")
-    print(
-        "either share of actors: "
-        f"{100 * either_actors / total_actors:.2f}%"
-    )
+    print(f"either share of actors: {100 * either_actors / total_actors:.2f}%")
 
     print("\n--- top 20 actors by event count (manual label aid) ---")
     print("flag legend: A = login ~ [bot], B = performed_via_github_app non-null")

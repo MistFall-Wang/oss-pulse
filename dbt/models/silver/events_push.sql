@@ -42,7 +42,14 @@ parsed as (
         created_at,
         ingest_hour,
         cast(get_json_object(payload_raw, '$.push_id')       as bigint) as push_id,
-        cast(get_json_object(payload_raw, '$.size')          as int)    as commit_size,
+        -- Fix for incident-0001: payload.size renamed to payload.commit_count
+        -- on some 2099-vintage hours. coalesce both names so historic and
+        -- post-rename rows both populate commit_size. See
+        -- docs/postmortems/0001-schema-drift.md for the incident path.
+        coalesce(
+            cast(get_json_object(payload_raw, '$.size')         as int),
+            cast(get_json_object(payload_raw, '$.commit_count') as int)
+        )                                                                  as commit_size,
         cast(get_json_object(payload_raw, '$.distinct_size') as int)    as distinct_commit_size,
                 get_json_object(payload_raw, '$.ref')                   as ref,
                 get_json_object(payload_raw, '$.head')                  as head_sha,

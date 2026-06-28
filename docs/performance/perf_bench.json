@@ -1,0 +1,121 @@
+{
+  "before": {
+    "label": "BEFORE",
+    "silver_full_refresh_seconds": 37.36,
+    "bronze_total_bytes": 465703375,
+    "bronze_total_files": 4,
+    "per_silver_model": {
+      "events_push": {
+        "wall_seconds": 2.73,
+        "rows": 385321,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 465703375,
+        "output_files": 15,
+        "output_bytes": 95527408
+      },
+      "events_pull_request": {
+        "wall_seconds": 0.21,
+        "rows": 38141,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 465703375,
+        "output_files": 14,
+        "output_bytes": 6558513
+      },
+      "events_issue_comment": {
+        "wall_seconds": 0.18,
+        "rows": 27989,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 465703375,
+        "output_files": 15,
+        "output_bytes": 5294045
+      },
+      "events_issues": {
+        "wall_seconds": 0.16,
+        "rows": 11786,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 465703375,
+        "output_files": 21,
+        "output_bytes": 2776569
+      },
+      "events_watch": {
+        "wall_seconds": 0.19,
+        "rows": 27097,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 465703375,
+        "output_files": 14,
+        "output_bytes": 3159409
+      },
+      "events_fork": {
+        "wall_seconds": 0.14,
+        "rows": 7062,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 465703375,
+        "output_files": 14,
+        "output_bytes": 1652123
+      }
+    }
+  },
+  "optimize": {
+    "wall_seconds": 6.9,
+    "bronze_bytes_before": 465703375,
+    "bronze_files_before": 4,
+    "bronze_bytes_after": 931403461,
+    "bronze_files_after": 8
+  },
+  "after": {
+    "label": "AFTER",
+    "silver_full_refresh_seconds": 38.34,
+    "bronze_total_bytes": 931403461,
+    "bronze_total_files": 8,
+    "per_silver_model": {
+      "events_push": {
+        "wall_seconds": 0.89,
+        "rows": 385321,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 931403461,
+        "output_files": 22,
+        "output_bytes": 143290880
+      },
+      "events_pull_request": {
+        "wall_seconds": 0.17,
+        "rows": 38141,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 931403461,
+        "output_files": 21,
+        "output_bytes": 9838370
+      },
+      "events_issue_comment": {
+        "wall_seconds": 0.14,
+        "rows": 27989,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 931403461,
+        "output_files": 22,
+        "output_bytes": 7940511
+      },
+      "events_issues": {
+        "wall_seconds": 0.12,
+        "rows": 11786,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 931403461,
+        "output_files": 28,
+        "output_bytes": 3889703
+      },
+      "events_watch": {
+        "wall_seconds": 0.13,
+        "rows": 27097,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 931403461,
+        "output_files": 21,
+        "output_bytes": 4739712
+      },
+      "events_fork": {
+        "wall_seconds": 0.14,
+        "rows": 7062,
+        "bronze_files_after_prune": 4,
+        "bronze_total_bytes": 931403461,
+        "output_files": 21,
+        "output_bytes": 2478782
+      }
+    }
+  }
+}

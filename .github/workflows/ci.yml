@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  static:
+    name: Lint + format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.8.12"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install deps
+        run: uv sync --frozen
+
+      - name: ruff (lint)
+        run: uv run ruff check .
+
+      - name: ruff (format)
+        run: uv run ruff format --check .
+
+  unit-tests:
+    name: pytest (Spark unit tests on JDK 17)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.8.12"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Set up JDK 17 (Spark 3.5 breaks on Java 18+)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install deps
+        run: uv sync --frozen
+
+      - name: pytest
+        env:
+          PYSPARK_SUBMIT_ARGS: "--driver-memory 2g pyspark-shell"
+        run: uv run pytest spark/tests/ -v
+
+  dbt-static:
+    name: dbt parse + compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.8.12"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install deps
+        run: uv sync --frozen
+
+      - name: dbt deps
+        working-directory: dbt
+        run: uv run --project .. dbt deps
+
+      # Use a stub profile that doesn't require a live warehouse — parse
+      # validates the project graph, schema yml, macros, and ref()
+      # resolution. Sprint 5a's full dbt run lives on a separate workflow
+      # that runs against Databricks SQL.
+      - name: Write CI-only dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<'EOF'
+          oss_pulse_dbt:
+            target: ci
+            outputs:
+              ci:
+                type: spark
+                method: session
+                schema: silver
+                host: NA
+          EOF
+
+      - name: dbt parse
+        working-directory: dbt
+        run: uv run --project .. dbt parse
+
+      - name: dbt compile
+        working-directory: dbt
+        run: uv run --project .. dbt compile
+
+  # Sprint 5a future: a workflow `dbt-prod.yml` triggers on merge-to-main
+  # and runs `dbt build --target prod` against the Databricks SQL warehouse,
+  # then `dbt test`. Holding off on that workflow until ADR-0005's adapter
+  # swap (dbt-spark → dbt-databricks) is executed in Sprint 5a.

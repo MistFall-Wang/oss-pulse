@@ -94,7 +94,7 @@ def bronze_type_in_known_set(bronze: DataFrame) -> CheckResult:
 
 
 def bronze_is_public_always_true(bronze: DataFrame) -> CheckResult:
-    bad = bronze.filter((F.col("is_public").isNull()) | (F.col("is_public") == False)).count()  # noqa: E712
+    bad = bronze.filter(F.col("is_public").isNull() | ~F.col("is_public")).count()
     return CheckResult(
         name="bronze.events.is_public == true for every row (ADR-0001 contract)",
         passed=bad == 0,
@@ -123,6 +123,19 @@ def silver_row_count_matches_bronze(
         name=f"silver.{silver_name} row count == bronze.events where type='{event_type}'",
         passed=silver_count == bronze_count,
         details=f"silver={silver_count:,}, bronze_filtered={bronze_count:,}",
+    )
+
+
+def silver_commit_size_not_null(silver_push: DataFrame) -> CheckResult:
+    """Added after incident-0001 (payload.size → payload.commit_count
+    rename). Catches silent NULL coercion from get_json_object at the
+    silver-gate stage so downstream Gold is never poisoned. See
+    docs/postmortems/0001-schema-drift.md."""
+    bad = silver_push.filter(F.col("commit_size").isNull()).count()
+    return CheckResult(
+        name="silver.events_push.commit_size not_null (incident-0001 regression gate)",
+        passed=bad == 0,
+        details=f"null rows={bad}",
     )
 
 

@@ -95,8 +95,12 @@ for label, events in samples.items():
 
 oldest_label, newest_label = min(top_fields_by_year), max(top_fields_by_year)
 print(f"\n  [{oldest_label} -> {newest_label}]")
-print_sorted_list(top_fields_by_year[newest_label] - top_fields_by_year[oldest_label], "    ADDED:   ")
-print_sorted_list(top_fields_by_year[oldest_label] - top_fields_by_year[newest_label], "    REMOVED: ")
+print_sorted_list(
+    top_fields_by_year[newest_label] - top_fields_by_year[oldest_label], "    ADDED:   "
+)
+print_sorted_list(
+    top_fields_by_year[oldest_label] - top_fields_by_year[newest_label], "    REMOVED: "
+)
 
 
 print("\n\nC. Top-level value types across years")
@@ -126,7 +130,9 @@ for label, events in samples.items():
                 continue
             present += 1
             id_types.add(type_name(obj.get("id")))
-        print(f"    {entity:5s}: present={present:>7,}/{len(events):,} id_types={sorted(id_types)}")
+        print(
+            f"    {entity:5s}: present={present:>7,}/{len(events):,} id_types={sorted(id_types)}"
+        )
 
 
 print("\n\nE. payload field schema drift by event type")
@@ -166,8 +172,12 @@ for event_type in FOCUS_TYPES:
     print(f"    [{oldest} -> {newest}] nested payload paths <= depth {MAX_PATH_DEPTH}")
     print(f"      ADDED path count:   {len(added_paths):,}")
     print(f"      REMOVED path count: {len(removed_paths):,}")
-    print(f"      ADDED path sample:   {sorted(added_paths)[:25] if added_paths else '(none)'}")
-    print(f"      REMOVED path sample: {sorted(removed_paths)[:25] if removed_paths else '(none)'}")
+    print(
+        f"      ADDED path sample:   {sorted(added_paths)[:25] if added_paths else '(none)'}"
+    )
+    print(
+        f"      REMOVED path sample: {sorted(removed_paths)[:25] if removed_paths else '(none)'}"
+    )
 
 
 print("\n\nF. Sample 2015 PushEvent structure")

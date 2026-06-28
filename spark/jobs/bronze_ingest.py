@@ -80,7 +80,9 @@ def shape_to_bronze(
             F.get_json_object("raw_line", "$.repo.name").alias("repo_name"),
             F.get_json_object("raw_line", "$.org.id").cast("long").alias("org_id"),
             F.get_json_object("raw_line", "$.org.login").alias("org_login"),
-            F.get_json_object("raw_line", "$.public").cast("boolean").alias("is_public"),
+            F.get_json_object("raw_line", "$.public")
+            .cast("boolean")
+            .alias("is_public"),
             F.get_json_object("raw_line", "$.created_at").alias("created_at_raw"),
             F.get_json_object("raw_line", "$.payload").alias("payload_raw"),
         )

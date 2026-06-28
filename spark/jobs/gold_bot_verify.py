@@ -67,9 +67,7 @@ def main() -> None:
         on=["repo_id", "activity_date"],
         how="inner",
     )
-    mismatches = joined.filter(
-        F.col("push_bot_count") != F.col("bot_push_count")
-    )
+    mismatches = joined.filter(F.col("push_bot_count") != F.col("bot_push_count"))
     n_mismatch = mismatches.count()
     print(f"\n[cross-mart] (repo, day) keys joined: {joined.count():,}")
     print(f"[cross-mart] push_bot_count != bot_push_count rows: {n_mismatch}")

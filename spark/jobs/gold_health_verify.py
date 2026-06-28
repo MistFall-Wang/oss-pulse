@@ -86,23 +86,32 @@ def main() -> None:
             f"    activity_date               = {activity_date}\n"
             f"    pr_merged_count             = {mart_merged}\n"
             f"    pr_avg_merge_latency_hours  = "
-            f"{mart_latency:.3f}" if mart_latency is not None else "    pr_avg_merge_latency_hours  = NULL"
+            f"{mart_latency:.3f}"
+            if mart_latency is not None
+            else "    pr_avg_merge_latency_hours  = NULL"
         )
 
-        recomputed = silver_pr.filter(
-            (F.col("repo_id") == repo_id)
-            & (F.to_date("created_at") == F.lit(activity_date))
-            & (F.col("action") == "closed")
-            & (F.col("pr_merged") == True)  # noqa: E712
-        ).agg(
-            F.count("*").alias("merged_count"),
-            (
-                F.avg(
-                    (F.unix_timestamp("pr_merged_at") - F.unix_timestamp("pr_created_at"))
-                    / 3600.0
-                )
-            ).alias("avg_latency_hours"),
-        ).collect()[0]
+        recomputed = (
+            silver_pr.filter(
+                (F.col("repo_id") == repo_id)
+                & (F.to_date("created_at") == F.lit(activity_date))
+                & (F.col("action") == "closed")
+                & (F.col("pr_merged") == True)  # noqa: E712
+            )
+            .agg(
+                F.count("*").alias("merged_count"),
+                (
+                    F.avg(
+                        (
+                            F.unix_timestamp("pr_merged_at")
+                            - F.unix_timestamp("pr_created_at")
+                        )
+                        / 3600.0
+                    )
+                ).alias("avg_latency_hours"),
+            )
+            .collect()[0]
+        )
 
         print(
             "\n[ground truth] silver recomputation:\n"
@@ -135,7 +144,8 @@ def main() -> None:
 
         joined = (
             health.filter(
-                (F.col("repo_id") == repo_id) & (F.col("activity_date") == activity_date)
+                (F.col("repo_id") == repo_id)
+                & (F.col("activity_date") == activity_date)
             )
             .select("repo_id", "activity_date", "unique_contributors")
             .join(

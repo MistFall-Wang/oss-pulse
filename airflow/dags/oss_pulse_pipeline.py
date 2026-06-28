@@ -103,7 +103,6 @@ with DAG(
     },
     tags=["oss-pulse", "medallion"],
 ) as dag:
-
     plan_ingest = PythonOperator(
         task_id="plan_ingest_range",
         python_callable=expand_ingest_commands,
@@ -119,8 +118,7 @@ with DAG(
     gate_bronze = BashOperator(
         task_id="gate_bronze",
         bash_command=(
-            f"cd {PROJECT_ROOT} && "
-            f".venv/bin/python -m quality.runner --layer bronze"
+            f"cd {PROJECT_ROOT} && .venv/bin/python -m quality.runner --layer bronze"
         ),
         env=COMMON_ENV,
         append_env=True,
@@ -128,10 +126,7 @@ with DAG(
 
     build_silver = BashOperator(
         task_id="build_silver",
-        bash_command=(
-            f"cd {PROJECT_ROOT}/dbt && "
-            f"../.venv/bin/dbt run --select silver"
-        ),
+        bash_command=(f"cd {PROJECT_ROOT}/dbt && ../.venv/bin/dbt run --select silver"),
         env=COMMON_ENV,
         append_env=True,
     )
@@ -139,8 +134,7 @@ with DAG(
     gate_silver = BashOperator(
         task_id="gate_silver",
         bash_command=(
-            f"cd {PROJECT_ROOT} && "
-            f".venv/bin/python -m quality.runner --layer silver"
+            f"cd {PROJECT_ROOT} && .venv/bin/python -m quality.runner --layer silver"
         ),
         env=COMMON_ENV,
         append_env=True,
@@ -148,10 +142,7 @@ with DAG(
 
     build_gold = BashOperator(
         task_id="build_gold",
-        bash_command=(
-            f"cd {PROJECT_ROOT}/dbt && "
-            f"../.venv/bin/dbt run --select gold"
-        ),
+        bash_command=(f"cd {PROJECT_ROOT}/dbt && ../.venv/bin/dbt run --select gold"),
         env=COMMON_ENV,
         append_env=True,
     )
@@ -159,8 +150,7 @@ with DAG(
     gate_gold = BashOperator(
         task_id="gate_gold",
         bash_command=(
-            f"cd {PROJECT_ROOT} && "
-            f".venv/bin/python -m quality.runner --layer gold"
+            f"cd {PROJECT_ROOT} && .venv/bin/python -m quality.runner --layer gold"
         ),
         env=COMMON_ENV,
         append_env=True,
@@ -178,10 +168,7 @@ with DAG(
 
     dbt_test_all = BashOperator(
         task_id="dbt_test_all",
-        bash_command=(
-            f"cd {PROJECT_ROOT}/dbt && "
-            f"../.venv/bin/dbt test"
-        ),
+        bash_command=(f"cd {PROJECT_ROOT}/dbt && ../.venv/bin/dbt test"),
         env=COMMON_ENV,
         append_env=True,
     )
