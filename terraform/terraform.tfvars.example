@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+aws_region    = "us-east-1"
+environment   = "dev"
+
+# Generate once: `openssl rand -hex 4` — appended to bucket names for
+# global uniqueness. Don't reuse across environments.
+bucket_suffix = "REPLACE_ME"
