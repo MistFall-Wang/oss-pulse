@@ -75,7 +75,23 @@ C. Top-level value types across years
     type        : ['str']
 
 
-D. payload field schema drift by event type
+D. Nested entity id types across years
+----------------------------------------------------------------------
+  2015-01-15-12
+    actor: present= 21,062/21,062 id_types=['int']
+    repo : present= 21,062/21,062 id_types=['int']
+    org  : present=  7,535/21,062 id_types=['int']
+  2018-01-15-12
+    actor: present= 63,463/63,463 id_types=['int']
+    repo : present= 63,463/63,463 id_types=['int']
+    org  : present= 22,646/63,463 id_types=['int']
+  2025-01-15-12
+    actor: present=270,553/270,553 id_types=['int']
+    repo : present=270,553/270,553 id_types=['int']
+    org  : present= 68,567/270,553 id_types=['int']
+
+
+E. payload field schema drift by event type
 ----------------------------------------------------------------------
 
   >>> PushEvent <<<
@@ -119,7 +135,7 @@ D. payload field schema drift by event type
       REMOVED path sample: (none)
 
 
-E. Sample 2015 PushEvent structure
+F. Sample 2015 PushEvent structure
 ----------------------------------------------------------------------
 {
   "id": "2514502600",

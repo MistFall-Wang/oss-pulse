@@ -113,7 +113,23 @@ for label, events in samples.items():
         print(f"    {field:12s}: {sorted(field_types[field])}")
 
 
-print("\n\nD. payload field schema drift by event type")
+print("\n\nD. Nested entity id types across years")
+print("-" * 70)
+for label, events in samples.items():
+    print(f"  {label}")
+    for entity in ("actor", "repo", "org"):
+        present = 0
+        id_types = set()
+        for event in events:
+            obj = event.get(entity)
+            if not obj:
+                continue
+            present += 1
+            id_types.add(type_name(obj.get("id")))
+        print(f"    {entity:5s}: present={present:>7,}/{len(events):,} id_types={sorted(id_types)}")
+
+
+print("\n\nE. payload field schema drift by event type")
 print("-" * 70)
 for event_type in FOCUS_TYPES:
     print(f"\n  >>> {event_type} <<<")
@@ -154,7 +170,7 @@ for event_type in FOCUS_TYPES:
     print(f"      REMOVED path sample: {sorted(removed_paths)[:25] if removed_paths else '(none)'}")
 
 
-print("\n\nE. Sample 2015 PushEvent structure")
+print("\n\nF. Sample 2015 PushEvent structure")
 print("-" * 70)
 push_2015 = next(
     (event for event in samples["2015-01-15-12"] if event["type"] == "PushEvent"),
