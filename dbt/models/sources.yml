@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: "Raw GH Archive events landed by spark/jobs/bronze_ingest.py"
+    meta:
+      external_location: "{{ env_var('OSS_PULSE_BRONZE_PATH', '/Users/peter/Desktop/oss-pulse/data/bronze/events') }}"
+    tables:
+      - name: events
+        description: "Bronze events table (one row per GitHub event, envelope strongly typed, payload as raw JSON)"
+        columns:
+          - name: id
+            description: "GitHub-issued event id, primary key (ADR-0002)"
+            tests:
+              - unique
+              - not_null
+          - name: type
+            description: "Event type, one of 15 known GitHub event types"
+            tests:
+              - not_null
+          - name: ingest_hour
+            description: "Partition column (ADR-0003), format YYYY-MM-DD-HH"
+            tests:
+              - not_null

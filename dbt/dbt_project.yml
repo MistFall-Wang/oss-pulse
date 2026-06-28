@@ -1,0 +1,28 @@
+name: 'oss_pulse_dbt'
+version: '1.0.0'
+config-version: 2
+
+profile: 'oss_pulse_dbt'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+on-run-start:
+  - "{{ register_external_sources() }}"
+
+models:
+  oss_pulse_dbt:
+    +file_format: delta
+    silver:
+      +materialized: table
+
+vars:
+  bronze_events_path: "/Users/peter/Desktop/oss-pulse/data/bronze/events"
