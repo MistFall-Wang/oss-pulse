@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" preserveAspectRatio="xMidYMid meet" role="img" aria-label="OSS Pulse — a production-grade GitHub activity lakehouse">
+  <title>OSS Pulse — a production-grade GitHub activity lakehouse</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0%" stop-color="#0a0f1c"/>
+      <stop offset="100%" stop-color="#0f1421"/>
+    </linearGradient>
+    <linearGradient id="goldText" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffd166"/>
+      <stop offset="55%" stop-color="#f59e42"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+    <linearGradient id="bronzePill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cd7f32"/>
+      <stop offset="100%" stop-color="#a86529"/>
+    </linearGradient>
+    <linearGradient id="silverPill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d6dde2"/>
+      <stop offset="100%" stop-color="#9aa8b0"/>
+    </linearGradient>
+    <linearGradient id="goldPill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd166"/>
+      <stop offset="100%" stop-color="#e29e2e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="400" fill="url(#bg)"/>
+
+  <g stroke="#1c2336" stroke-width="1" opacity="0.45">
+    <line x1="0" y1="105" x2="1280" y2="105"/>
+    <line x1="0" y1="265" x2="1280" y2="265"/>
+    <line x1="320" y1="0" x2="320" y2="400"/>
+    <line x1="960" y1="0" x2="960" y2="400"/>
+  </g>
+
+  <text x="64" y="80" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="13" fill="#ffd166" letter-spacing="3" font-weight="600">PORTFOLIO  ·  SENIOR DATA ENGINEERING</text>
+
+  <text x="64" y="190" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="84" font-weight="800" fill="url(#goldText)" letter-spacing="-2">OSS Pulse</text>
+
+  <text x="64" y="240" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="22" fill="#cdd5e3">a production-grade GitHub activity lakehouse  ·  Delta  ·  dbt  ·  Spark  ·  Airflow</text>
+
+  <g transform="translate(64, 295)">
+    <rect x="0" y="0" width="356" height="52" rx="10" fill="url(#bronzePill)"/>
+    <text x="22" y="32" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#2d1a07" letter-spacing="1.5">BRONZE</text>
+    <text x="125" y="32" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="16" font-weight="600" fill="#1a1305">613,876 events</text>
+
+    <text x="372" y="35" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="22" fill="#5b6478">→</text>
+
+    <rect x="396" y="0" width="356" height="52" rx="10" fill="url(#silverPill)"/>
+    <text x="418" y="32" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#1a2329" letter-spacing="1.5">SILVER</text>
+    <text x="510" y="32" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="16" font-weight="600" fill="#1a1305">6 tables  ·  497K rows</text>
+
+    <text x="768" y="35" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="22" fill="#5b6478">→</text>
+
+    <rect x="792" y="0" width="356" height="52" rx="10" fill="url(#goldPill)"/>
+    <text x="814" y="32" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="13" font-weight="700" fill="#2d1a07" letter-spacing="1.5">GOLD</text>
+    <text x="892" y="32" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="16" font-weight="600" fill="#1a1305">3 marts  ·  392K rows</text>
+  </g>
+
+  <text x="64" y="382" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="12" fill="#8b95a8">100+ dbt tests   ·   18 DQ gates   ·   7 ADRs   ·   5 runbooks   ·   1 postmortem   ·   <tspan fill="#22d3a5" font-weight="700">0.0000 % batch↔streaming reconcile delta</tspan></text>
+</svg>

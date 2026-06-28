@@ -1,35 +1,62 @@
-# OSS Pulse
+<p align="center">
+  <img src="docs/img/banner.svg" alt="OSS Pulse — a production-grade GitHub activity lakehouse" width="100%"/>
+</p>
 
-> Production-grade GitHub activity lakehouse on **Delta + dbt + Spark + Airflow**.
-> 613,876 events through Bronze → Silver → Gold, gated by 18 data-quality checks
-> at every layer boundary, with a real deliberately-induced incident, an
-> honest performance report, and a streaming MVP that reconciled 181,221
-> events against batch with **zero row delta**.
+<p align="center">
+  <a href="https://github.com/MistFall-Wang/oss-pulse/actions/workflows/ci.yml"><img src="https://github.com/MistFall-Wang/oss-pulse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/python-3.11-3776ab?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Spark-3.5-e25a1c?logo=apachespark&logoColor=white" alt="Spark">
+  <img src="https://img.shields.io/badge/Delta_Lake-3.2-00add8" alt="Delta Lake">
+  <img src="https://img.shields.io/badge/dbt-1.9-ff694b?logo=dbt&logoColor=white" alt="dbt">
+  <img src="https://img.shields.io/badge/Airflow-2.10-017cee?logo=apacheairflow&logoColor=white" alt="Airflow">
+  <img src="https://img.shields.io/badge/Terraform-1.15-7b42bc?logo=terraform&logoColor=white" alt="Terraform">
+  <img src="https://img.shields.io/badge/AWS%20S3-live-ff9900?logo=amazonaws&logoColor=white" alt="AWS S3 live">
+</p>
 
-[![CI](https://github.com/MistFall-Wang/oss-pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/MistFall-Wang/oss-pulse/actions/workflows/ci.yml)
-&nbsp;
-![Python](https://img.shields.io/badge/python-3.11-3776ab?logo=python&logoColor=white)
-![Spark](https://img.shields.io/badge/Spark-3.5-e25a1c?logo=apachespark&logoColor=white)
-![Delta](https://img.shields.io/badge/Delta_Lake-3.2-00add8)
-![dbt](https://img.shields.io/badge/dbt-1.9-ff694b?logo=dbt&logoColor=white)
-![Airflow](https://img.shields.io/badge/Airflow-2.10-017cee?logo=apacheairflow&logoColor=white)
-![Java](https://img.shields.io/badge/JDK-17-007396?logo=openjdk&logoColor=white)
-
-**[→ Visual showcase site](https://mistfall-wang.github.io/oss-pulse/)** &nbsp;·&nbsp; **[Master plan](docs/PROJECT_PLAN.md)** &nbsp;·&nbsp; **[ADRs](docs/adr/)** &nbsp;·&nbsp; **[Runbooks](docs/runbooks/)** &nbsp;·&nbsp; **[Postmortem 0001](docs/postmortems/0001-schema-drift.md)**
+<p align="center">
+  <b><a href="https://mistfall-wang.github.io/oss-pulse/">Visual showcase site</a></b>
+  &nbsp;·&nbsp;
+  <a href="docs/PROJECT_PLAN.md">Master plan</a>
+  &nbsp;·&nbsp;
+  <a href="docs/adr/">ADRs</a>
+  &nbsp;·&nbsp;
+  <a href="docs/runbooks/">Runbooks</a>
+  &nbsp;·&nbsp;
+  <a href="docs/postmortems/0001-schema-drift.md">Postmortem</a>
+  &nbsp;·&nbsp;
+  <a href="docs/runbooks/cloud_apply_walkthrough.md">Cloud apply walkthrough</a>
+  &nbsp;·&nbsp;
+  <a href="docs/video_demo_script.md">Video demo script</a>
+</p>
 
 ---
 
+End-to-end medallion on **Delta + dbt + Spark + Airflow**. 613,876 events
+through Bronze → Silver → Gold, gated by **18 data-quality checks** at every
+layer boundary. A deliberately-induced incident with a real postmortem, an
+honest performance report that says "OPTIMIZE didn't help here, here's why",
+and a streaming MVP that reconciled 181,221 events against batch with **zero
+row delta**. Bronze layer is live on AWS S3, queryable by the same Spark
+that runs locally, and the ADR-0002 idempotency invariant survives the
+cloud round-trip.
+
+> [!TIP]
+> Every irreversible decision in this project has an
+> [ADR](docs/adr/). Every gate, postmortem, and verifier exists because it
+> caught a real problem at least once. The visualizations below all use real
+> measured numbers — nothing is illustrative.
+
 ## At a glance
 
-| Bronze events | Delta tables | dbt tests | DQ gates | Accepted ADRs | Runbooks | Postmortems | Batch↔stream Δ |
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| **613,876** | **11** | **100+** | **18** | **7** | **5** | **1** | **0.0000 %** |
+|       Bronze events |  Delta tables |       dbt tests |        DQ gates | Accepted ADRs | Runbooks | Postmortems |        Reconcile delta |
+| ------------------: | ------------: | --------------: | --------------: | ------------: | -------: | ----------: | ---------------------: |
+|         **613,876** |        **11** |        **100+** |          **18** |         **7** |    **5** |       **1** |          **0.0000 %**  |
 
 ---
 
 ## Architecture
 
-End-to-end medallion with a parallel streaming branch. Bronze stores `payload`
+End-to-end medallion + a parallel streaming branch. Bronze stores `payload`
 as raw JSON STRING so upstream schema drift never crashes ingestion
 ([ADR-0001](docs/adr/0001-payload-handling.md)). Every layer MERGEs on stable
 GitHub ids — no surrogate keys ([ADR-0004](docs/adr/0004-no-surrogate-keys.md)).
@@ -39,7 +66,7 @@ Silver tables are built only when a Gold mart needs them
 ```mermaid
 flowchart TD
     Raw[("raw .json.gz<br/>267 MB · 4 hours")]
-    Bronze["<b>bronze.events</b><br/>Delta, partitioned by ingest_hour<br/>613,876 rows · 453 MB"]
+    Bronze["<b>bronze.events</b><br/>Delta · partitioned by ingest_hour<br/>613,876 rows · 453 MB"]
 
     subgraph Silver ["<b>silver</b> — 6 tables, built on demand"]
         direction LR
@@ -94,13 +121,54 @@ flowchart TD
     class SR,SC,SX stream
 ```
 
+### Event-type flow at scale — width = real row count
+
+`PushEvent` is **two-thirds** of every event in the sample. The Sankey makes
+the volume distribution visually obvious — and shows exactly how much each
+Silver table costs to maintain.
+
+```mermaid
+---
+config:
+  sankey:
+    showValues: false
+    nodeAlignment: justify
+---
+sankey-beta
+
+raw GH Archive (.json.gz),bronze.events,613876
+bronze.events,events_push,385321
+bronze.events,events_pull_request,38141
+bronze.events,events_issue_comment,27989
+bronze.events,events_watch,27097
+bronze.events,events_issues,11786
+bronze.events,events_fork,7062
+bronze.events,other 9 event types,116480
+events_push,gold.repo_daily_activity,162719
+events_pull_request,gold.oss_health_mart,12000
+events_issues,gold.oss_health_mart,9000
+events_issue_comment,gold.oss_health_mart,9107
+events_push,gold.bot_vs_human_activity_mart,162000
+events_pull_request,gold.bot_vs_human_activity_mart,18000
+events_issues,gold.bot_vs_human_activity_mart,2500
+events_issue_comment,gold.bot_vs_human_activity_mart,8000
+events_watch,gold.bot_vs_human_activity_mart,5000
+events_fork,gold.bot_vs_human_activity_mart,3916
+```
+
+> [!NOTE]
+> Gold-side weights are approximate proportions of the underlying
+> Silver rows that contribute to each mart's aggregation (one row per repo-day
+> ≠ one row per event). The point is the visual story of relative volume,
+> not exact mart cardinality.
+
 ---
 
 ## Findings from the data
 
 ### Bot vs human activity, per repo-day
 
-Across 199,416 (repo, day) rows in `bot_vs_human_activity_mart`, the
+Across 199,416 `(repo, day)` rows in `bot_vs_human_activity_mart`, the
 distribution is bimodal — most repo-days are entirely human or entirely bot,
 with only a small "interesting tail" of mixed activity.
 
@@ -112,10 +180,12 @@ pie showData
     "Mixed activity" : 2.4
 ```
 
-> Roughly one third of repo-days are 100 % automated traffic. This is the
-> headline OSS-health finding — and exactly what made the Sprint 2.5 spike
-> flag that the original bot rule needed a curated allowlist (`Rule C` in
-> [ADR-0006](docs/adr/0006-bot-identification.md)), not just the `[bot]` suffix.
+> [!IMPORTANT]
+> Roughly **one third of repo-days are 100 % automated traffic**.
+> This is the headline OSS-health finding — and exactly what made the
+> Sprint 2.5 spike flag that the original bot rule needed a curated allowlist
+> ([Rule C in ADR-0006](docs/adr/0006-bot-identification.md)), not just the
+> `[bot]` suffix.
 
 ### Top bots by event count
 
@@ -123,7 +193,7 @@ pie showData
 is the visible miss for `[bot]`-suffix detection; the
 [`known_bots.csv` allowlist](dbt/seeds/known_bots.csv) catches it via Rule C.
 
-```
+```text
 github-actions[bot]       ████████████████████████████████████████  129,533
 renovate[bot]             ██                                          6,480
 dependabot[bot]           ██                                          6,203
@@ -140,7 +210,7 @@ Filtered to `unique_pushers ≥ 5` to surface real OSS projects vs
 single-actor automation.
 
 | repo_name              | push_count | total_commits | unique_pushers | bot_push_count |
-|------------------------|-----------:|--------------:|---------------:|---------------:|
+| ---------------------- | ---------: | ------------: | -------------: | -------------: |
 | `NexusAILab/cdn`       |        131 |           131 |              5 |              0 |
 | `odoo-dev/odoo`        |         75 |         2,428 |             49 |              0 |
 | `LucasOtw/SAE3_Sco…`   |         69 |            84 |              7 |              0 |
@@ -156,20 +226,39 @@ single-actor automation.
 
 ## Batch ↔ streaming reconciliation (Sprint 6 MVP)
 
-Replay one ingest hour of PushEvents to Redpanda → drain via Spark Structured
-Streaming + Delta MERGE into a parallel `silver_streaming` table → compare
-row-by-row to the batch Silver table for the same hour.
+Replay one ingest hour of PushEvents to Redpanda → drain via Spark
+Structured Streaming + Delta MERGE into a parallel `silver_streaming` table
+→ compare row-by-row to the batch Silver table for the same hour.
 
-| Metric                  |       Batch |   Streaming |   Δ |
-|-------------------------|------------:|------------:|----:|
-| rows (`events_push`)    | **181,221** | **181,221** | **+0** |
-| `commit_size` Σ         |     576,167 |     576,167 |  +0 |
-| ids only in batch       |           — |           — |  0  |
-| ids only in streaming   |           — |           — |  0  |
+```mermaid
+sequenceDiagram
+    participant Raw as GH Archive .json.gz
+    participant Kafka as Redpanda topic<br/>(gh-events)
+    participant Spark as Structured Streaming<br/>foreachBatch + MERGE
+    participant SS as silver_streaming.events_push
+    participant SB as silver.events_push (batch)
+    participant R as reconcile.py
 
-**Threshold:** `< 0.01 %` &nbsp;·&nbsp; **Actual:** `0.0000 %` &nbsp;·&nbsp;
-Exactly-once via `foreachBatch` + Delta MERGE on `id` (no separate offset
-store needed).
+    Raw->>Kafka: replay.py — 181,221 messages,<br/>keyed by repo_id
+    Kafka->>Spark: subscribe gh-events
+    Spark->>SS: Delta MERGE on id<br/>(exactly-once via idempotency)
+    R->>SB: row count, ∑ commit_size, id set
+    R->>SS: row count, ∑ commit_size, id set
+    Note over R,SS: Δ rows = 0 · Δ commits = 0<br/>orphan ids = 0 / 0
+```
+
+| Metric                |   Batch |   Streaming |   Δ |
+| --------------------- | ------: | ----------: | --: |
+| rows (`events_push`)  | **181,221** | **181,221** | **+0** |
+| `commit_size` Σ       |     576,167 |     576,167 |  +0 |
+| ids only in batch     |           — |           — |  0  |
+| ids only in streaming |           — |           — |  0  |
+
+> [!TIP]
+> Exactly-once via `foreachBatch` + Delta MERGE on `id` — no
+> separate offset store needed. The natural idempotency of MERGE
+> ([ADR-0002](docs/adr/0002-event-id-idempotency.md)) carries through to the
+> streaming side without additional moving parts.
 
 <details>
 <summary><b>Reproduce in 4 commands</b></summary>
@@ -181,6 +270,42 @@ uv run python -m streaming.consumer
 uv run python -m streaming.reconcile --ingest-hour 2025-01-15-12
 ```
 </details>
+
+---
+
+## Cloud — Bronze live on AWS S3
+
+Terraform-provisioned, real, queryable. Same idempotency invariant
+([ADR-0002](docs/adr/0002-event-id-idempotency.md)) survives the cloud
+round-trip.
+
+```mermaid
+flowchart LR
+    Local["data/bronze/events<br/>local Delta · 444 MB · 4 files"]
+    TF["terraform apply<br/>16 resources, 0 destroy"]:::infra
+    S3["s3a://oss-pulse-bronze-dev-9f3eb8a5<br/>events/ — 28 objects · 444 MB"]:::aws
+    Smoke["spark.jobs.s3_smoke_test<br/>(via hadoop-aws + delta-spark)"]:::test
+    OK["613,876 rows<br/>= 613,876 distinct ids<br/>PASS"]:::pass
+
+    Local -->|aws s3 sync<br/>preserves _delta_log| S3
+    TF -.->|provisions buckets +<br/>versioning + lifecycle| S3
+    S3 -->|s3a://| Smoke
+    Smoke --> OK
+
+    classDef infra fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
+    classDef aws   fill:#fff3e0,stroke:#f97316,color:#7c2d12
+    classDef test  fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef pass  fill:#d1fae5,stroke:#059669,color:#064e3b,font-weight:bold
+```
+
+> [!NOTE]
+> Customer-managed KMS and the Databricks cross-account IAM role were
+> **deferred** from the initial apply because the bootstrapping IAM user
+> doesn't have `kms:CreateKey` or `iam:CreateRole`. The buckets fall back
+> to AWS-default SSE-S3 (AES256, AWS-managed key — still encrypted at rest).
+> Step 9.0 of the [cloud apply walkthrough](docs/runbooks/cloud_apply_walkthrough.md)
+> shows how to re-enable KMS + IAM later. **Cost while running: ~$0/mo** in
+> the AWS Free Tier; back to $0 immediately after `terraform destroy`.
 
 ---
 
@@ -207,23 +332,25 @@ flowchart LR
     classDef fail fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,font-weight:bold
 ```
 
-| Step | Why it didn't catch (or did) |
-|------|------------------------------|
-| `bronze_ingest` PASS | Bronze stores `payload` as raw JSON STRING by design ([ADR-0001](docs/adr/0001-payload-handling.md)). The rename is invisible at this layer. |
-| `gate_bronze` PASS | 4 checks (id-unique, type-in-set, public, created_at-not-null) all hold; payload contents aren't checked at Bronze. |
-| `silver build` PASS | `get_json_object(payload_raw, '$.size')` silently returns NULL on the 200 rows. SELECT projects NULL successfully. |
-| `gate_silver` PASS | Silver row count still equals Bronze filtered by type — NULLs are still rows. **This is the gate the postmortem added a regression check to.** |
-| `dbt test` **FAIL** | `not_null_events_push_commit_size`: Got 200 results, configured to fail if != 0. |
+| Step                 | Why it didn't catch (or did)                                                                                                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bronze_ingest` PASS | Bronze stores `payload` as raw JSON STRING by design ([ADR-0001](docs/adr/0001-payload-handling.md)). The rename is invisible at this layer.                                                                  |
+| `gate_bronze` PASS   | 4 checks (id-unique, type-in-set, public, created_at-not-null) all hold; payload contents aren't checked at Bronze.                                                                                          |
+| `silver build` PASS  | `get_json_object(payload_raw, '$.size')` silently returns NULL on the 200 rows. SELECT projects NULL successfully.                                                                                            |
+| `gate_silver` PASS   | Silver row count still equals Bronze filtered by type — NULLs are still rows. **This is the gate the postmortem added a regression check to.**                                                                |
+| `dbt test` **FAIL**  | `not_null_events_push_commit_size`: Got 200 results, configured to fail if != 0.                                                                                                                              |
 
+> [!CAUTION]
 > **Root cause: gate-placement, not a missing test.** The dbt schema test
 > catches it, but it runs at the end of the pipeline — Gold marts would
 > already have consumed the bad Silver data. The fix is a one-line
 > `coalesce(size, commit_count)` in `events_push.sql` plus a new
-> `silver_commit_size_not_null` gate in `quality/checks.py` that moves
-> detection between Silver and Gold, where it belongs.
-
-Full 5 Whys + lessons in
-[**docs/postmortems/0001-schema-drift.md**](docs/postmortems/0001-schema-drift.md).
+> `silver_commit_size_not_null` gate in
+> [`quality/checks.py`](quality/checks.py) that moves detection between
+> Silver and Gold, where it belongs.
+>
+> Full 5 Whys + lessons in
+> [docs/postmortems/0001-schema-drift.md](docs/postmortems/0001-schema-drift.md).
 
 ---
 
@@ -235,7 +362,7 @@ didn't.** Recording the failure honestly is the experiment's value.
 
 ### Per-type filter wall-clock
 
-```
+```text
 events_push BEFORE         ████████████████████████████  2.73 s   files_read = 4
 events_push AFTER          ████████                      0.89 s   files_read = 4   ◄ same prune, "speedup" is JIT warmup
 
@@ -245,31 +372,60 @@ full silver build AFTER    █████████████████�
 
 ### Bronze storage — the 2× temporary spike
 
-```
+```text
 before OPTIMIZE                ████████████████  465 MB · 4 files
 after OPTIMIZE (pre-VACUUM)    ████████████████████████████████  931 MB · 8 files  ⚠ 2×
 after VACUUM (dev only, 0h)    ████████████████  466 MB · 4 files
 ```
 
-> **Why it was a no-op:** ZORDER re-arranges rows *within* a file but can't
-> split below the file boundary. At 4 files, the smallest skip-unit is 25 %
-> of the table — no prune possible. At 100× scale, worth re-running.
+> [!WARNING]
+> **Why it was a no-op:** ZORDER re-arranges rows *within* a file but
+> can't split below the file boundary. At 4 files, the smallest skip-unit is
+> 25 % of the table — no prune possible. At 100× scale, worth re-running.
 > The 2× storage spike is the empirical reason ADR-0009 (compact-daily,
-> vacuum-weekly with 168h retention) is mandatory, not aspirational.
+> vacuum-weekly with 168h retention) is **mandatory, not aspirational**.
 >
 > Full 5-dimension report:
-> [**docs/performance/sprint5b_tuning.md**](docs/performance/sprint5b_tuning.md).
+> [docs/performance/sprint5b_tuning.md](docs/performance/sprint5b_tuning.md).
 
 ---
 
-## The seven senior signals — where each one lives
+## The seven senior signals
 
-Each row names the artifact that proves the signal, so a reviewer can ask
-"show me" instead of trusting the claim.
+```mermaid
+mindmap
+  root((Seven<br/>senior signals))
+    Idempotency
+      MERGE on event_id
+      Cross-layer verifiers in spark/jobs
+      Cloud round-trip invariant
+    Backfill / replay
+      Airflow params.start_hour
+      runbooks/backfill.md
+    Schema-drift tolerance
+      ADR-0001 payload as raw JSON
+      Postmortem 0001 (real injection)
+    Data-quality gates
+      quality/checks.py
+      18 checks across 4 suites
+      Each suite exits non-zero
+    Perf tuning report
+      sprint5b_tuning.md
+      5 dimensions before / after
+      Honest negative result
+    Batch + streaming
+      Redpanda + foreachBatch + MERGE
+      181,221 events
+      0 row reconcile delta
+    Operational docs
+      7 ADRs
+      5 runbooks
+      1 postmortem
+```
 
 | # | Signal | Lives in |
 |---|--------|----------|
-| 1 | **Idempotency** | Bronze + Silver + Gold all MERGE on natural ids; runtime invariants in [`spark/jobs/gold_verify.py`](spark/jobs/gold_verify.py), [`gold_health_verify.py`](spark/jobs/gold_health_verify.py), [`gold_bot_verify.py`](spark/jobs/gold_bot_verify.py) |
+| 1 | **Idempotency** | Bronze + Silver + Gold all MERGE on natural ids; runtime invariants in [`spark/jobs/gold_verify.py`](spark/jobs/gold_verify.py), [`gold_health_verify.py`](spark/jobs/gold_health_verify.py), [`gold_bot_verify.py`](spark/jobs/gold_bot_verify.py), [`s3_smoke_test.py`](spark/jobs/s3_smoke_test.py) (cloud round-trip) |
 | 2 | **Backfill / replay** | Airflow DAG `params.start_hour` / `end_hour`; [`docs/runbooks/backfill.md`](docs/runbooks/backfill.md) |
 | 3 | **Schema-drift tolerance** | [ADR-0001](docs/adr/0001-payload-handling.md) (Bronze contract) + [postmortem 0001](docs/postmortems/0001-schema-drift.md) (proven under a real injected break) |
 | 4 | **DQ gates** | [`quality/runner.py`](quality/runner.py) — 18 checks across 4 suites, each exits non-zero to gate the next Airflow task |
@@ -279,11 +435,29 @@ Each row names the artifact that proves the signal, so a reviewer can ask
 
 ---
 
-## ADR registry
+## ADR registry — placed by reversibility × scope
 
-Every irreversible decision (storage format, partition strategy, primary key,
-bot rule…) gets an MADR-lite Architecture Decision Record with context,
-alternatives rejected, and revisit conditions.
+The most senior signal in this project isn't any single ADR; it's that
+every decision in the upper-right quadrant (hard to change × cross-cutting)
+has a written rationale you can challenge.
+
+```mermaid
+quadrantChart
+    title ADR placement
+    x-axis "Easy to revisit" --> "Hard to change later"
+    y-axis "Narrow scope" --> "Cross-cutting"
+    quadrant-1 "Most senior signal · ADR-mandatory"
+    quadrant-2 "Cross-cutting · review at quarter"
+    quadrant-3 "Annotate in code"
+    quadrant-4 "Hard but contained"
+    "0001 payload handling": [0.88, 0.86]
+    "0002 event_id idempotency": [0.92, 0.78]
+    "0003 partition by ingest_hour": [0.80, 0.68]
+    "0004 no surrogate keys": [0.55, 0.60]
+    "0005 silver build strategy": [0.40, 0.65]
+    "0006 bot identification": [0.45, 0.52]
+    "0007 storage overhead": [0.35, 0.45]
+```
 
 | # | Title | Status |
 |---|-------|--------|
@@ -295,7 +469,7 @@ alternatives rejected, and revisit conditions.
 | 0006 | [Bot rule: Rule A (`[bot]` suffix) + Rule C (allowlist) + event-level `is_app_event`](docs/adr/0006-bot-identification.md) | ✅ Accepted |
 | 0007 | [Bronze storage overhead — 1.7× raw `.json.gz`, planning constants](docs/adr/0007-bronze-storage-overhead.md) | ✅ Accepted |
 | 0008 | Streaming time semantics (event vs processing time) | ⏳ Sprint 7 (optional) |
-| 0009 | OPTIMIZE / VACUUM cadence — preview captured in `sprint5b_tuning.md` | ⏳ Sprint 9 (optional) |
+| 0009 | OPTIMIZE / VACUUM cadence — preview in `sprint5b_tuning.md` | ⏳ Sprint 9 (optional) |
 
 ---
 
@@ -305,22 +479,34 @@ Original 6-week estimate revised to a realistic 8–10 weeks. Streaming was
 de-scoped from a 4-week build to a 1-week MVP that ships the talking point.
 
 ```mermaid
-flowchart LR
-    S0["Sprint 0<br/>Schema discovery<br/>ADR-0001"]:::done
-    S1["Sprint 1<br/>Bronze + first Silver<br/>ADR-0002, 0003"]:::done
-    S2["Sprint 2 + 2.5<br/>First Gold mart<br/>bot heuristic spike"]:::done
-    S3["Sprint 3<br/>2 more marts<br/>ADR-0005, 0006"]:::done
-    S4["Sprint 4<br/>DQ gates · Airflow<br/>4 runbooks"]:::done
-    S5b["Sprint 5b<br/>CI · perf · postmortem<br/>ADR-0007"]:::done
-    S5a["Sprint 5a<br/>Terraform · IAM<br/><i>apply pending AWS</i>"]:::partial
-    S6["Sprint 6<br/>Streaming MVP<br/>0 row delta"]:::done
-    S79["Sprint 7-9<br/>Streaming prod-grade<br/>(backlog)"]:::pending
-
-    S0 --> S1 --> S2 --> S3 --> S4 --> S5b --> S5a --> S6 -.-> S79
-
-    classDef done    fill:#d1fae5,stroke:#059669,color:#064e3b
-    classDef partial fill:#fef3c7,stroke:#d97706,color:#5d3a05
-    classDef pending fill:#f3f4f6,stroke:#6b7280,color:#374151
+timeline
+    title OSS Pulse — Sprint progression
+    Sprint 0 : Schema discovery
+             : ADR-0001 payload handling
+    Sprint 1 : Bronze ingest · first Silver
+             : ADR-0002 idempotency
+             : ADR-0003 partitioning
+    Sprint 2 + 2.5 : First Gold mart
+                   : ADR-0004 no surrogate keys
+                   : Bot heuristic spike
+    Sprint 3 : 2 more marts (health, bot)
+             : 5 more Silver tables
+             : ADR-0005, 0006
+    Sprint 4 : DQ gates · Airflow DAG
+             : 4 runbooks
+    Sprint 5b : GitHub Actions CI
+              : Perf tuning report
+              : ADR-0007
+              : Postmortem 0001
+    Sprint 5a : Terraform · S3 · IAM
+              : Apply on AWS Live ☁
+              : Smoke test PASS
+    Sprint 6 : Streaming MVP
+             : Redpanda + foreachBatch + MERGE
+             : 0 row reconcile delta
+    Backlog : Sprint 7-9
+            : Streaming production-grade
+            : ADR-0008 · 0009
 ```
 
 ---
@@ -332,7 +518,7 @@ spark/                  PySpark jobs
   jobs/                 bronze_ingest · bronze_inspect · gold_verify ·
                         gold_health_verify · gold_bot_verify ·
                         bot_heuristic_spike · perf_bench · perf_vacuum ·
-                        incident_inject
+                        incident_inject · s3_smoke_test
   schemas.py            Bronze envelope schema (single source of truth)
   tests/                chispa-style pytest unit tests
 quality/                lightweight DQ-gate framework (intentionally not full GE)
@@ -347,7 +533,7 @@ dbt/                    dbt-spark project
 airflow/dags/           parameterized end-to-end DAG (oss_pulse_pipeline.py)
 streaming/              Sprint 6 MVP (Redpanda + Structured Streaming)
   docker-compose.yml · replay.py · consumer.py · reconcile.py
-terraform/              Sprint 5a IaC (S3 + IAM + KMS)
+terraform/              Sprint 5a IaC (S3 + IAM + KMS — applied on AWS)
 data/                   (gitignored)
   raw/                  GH Archive .json.gz inputs
   bronze/               Delta-backed Bronze table
@@ -355,13 +541,15 @@ data/                   (gitignored)
 docs/
   PROJECT_PLAN.md       canonical master plan
   index.html            visual showcase (GitHub Pages from /docs)
+  img/banner.svg        hero banner used by this README
   adr/                  ADR-0001 .. 0007
   marts/                per-mart design docs
   runbooks/             backfill · schema_change · data_missing ·
-                        airflow_setup · cloud_migration
+                        airflow_setup · cloud_migration · cloud_apply_walkthrough
   postmortems/          0001-schema-drift
   performance/          sprint5b_tuning.md + raw bench JSON
   spikes/               time-boxed validation experiments
+  video_demo_script.md  5-min recording script for the project demo
 .github/workflows/      ci.yml (ruff · pytest · dbt parse + compile)
 ```
 
@@ -369,9 +557,10 @@ docs/
 
 ## Run it locally
 
-Requires **JDK 17**. Spark 3.5 / Hadoop 3.3.4 still call
-`Subject.getSubject`, which was removed in Java 18+. Tested on Amazon
-Corretto 17.
+> [!IMPORTANT]
+> Requires **JDK 17**. Spark 3.5 / Hadoop 3.3.4 still call
+> `Subject.getSubject`, which was removed in Java 18+. Tested on Amazon
+> Corretto 17.
 
 ```bash
 # Setup
@@ -406,6 +595,9 @@ uv run python -m streaming.reconcile --ingest-hour 2025-01-15-12
 uv run python -m spark.jobs.incident_inject
 # ... observe each gate ...
 uv run python -m spark.jobs.incident_inject --cleanup
+
+# Cloud — read Bronze from S3 (after terraform apply + aws s3 sync)
+uv run python -m spark.jobs.s3_smoke_test --bucket oss-pulse-bronze-dev-9f3eb8a5
 ```
 
 ---
@@ -415,9 +607,10 @@ uv run python -m spark.jobs.incident_inject --cleanup
 | State | What it means |
 |-------|---------------|
 | ✅ Sprint 0 – 6 done | Bronze → Silver → Gold + DQ + Airflow + CI + perf + postmortem + streaming MVP all shipped |
-| ⚠ Sprint 5a code-complete | Terraform + cloud-migration runbook ready; `terraform apply` requires user-side AWS account + Databricks Free Edition signup ([runbook](docs/runbooks/cloud_migration.md)) |
+| ✅ Sprint 5a Bronze live on AWS | Terraform-provisioned S3, Bronze synced, smoke test PASS — 613,876 rows match |
+| ⚠ Databricks compute pending | Workspace signup is user-side; [walkthrough](docs/runbooks/cloud_apply_walkthrough.md) Steps 7–11 ready when you are |
 | ⏳ Sprint 7–9 backlog | Streaming production-grade (time-warped replay, watermarks, continuous reconciliation, ADR-0008, 0009). Triggered only by job-market signal. |
 
 ---
 
-<sub>Built by **Peter Wang** as a portfolio for Canadian Senior Data Engineer roles. The full master plan lives in [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md). For the interactive visual showcase: [**mistfall-wang.github.io/oss-pulse**](https://mistfall-wang.github.io/oss-pulse/).</sub>
+<sub>Built by <b>Peter Wang</b> as a portfolio for Canadian Senior Data Engineer roles. The full master plan lives in <a href="docs/PROJECT_PLAN.md"><code>docs/PROJECT_PLAN.md</code></a>. For the interactive visual showcase: <a href="https://mistfall-wang.github.io/oss-pulse/"><b>mistfall-wang.github.io/oss-pulse</b></a>.</sub>
