@@ -16,6 +16,9 @@ build/
 dist/
 *.egg-info/
 .eggs/
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
 
 # 虚拟环境
 venv/
@@ -23,7 +26,7 @@ venv/
 env/
 ENV/
 
-# ===== 敏感信息（最重要！）=====
+# ===== 敏感信息 =====
 .env
 .env.*
 !.env.example
@@ -33,6 +36,10 @@ credentials.json
 config.local.*
 secrets/
 
+# ===== 数据 =====
+data/*
+!data/.gitkeep
+
 # ===== IDE / 编辑器 =====
 .vscode/
 .idea/
@@ -40,3 +47,7 @@ secrets/
 *.swo
 *~
 
+# ===== Terraform =====
+*.tfstate
+*.tfstate.backup
+.terraform/

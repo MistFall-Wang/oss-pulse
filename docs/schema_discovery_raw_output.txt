@@ -1,0 +1,110 @@
+
+============================================================
+Loaded 529,351 events from 2 hourly files
+============================================================
+
+Q1. Event type distribution
+------------------------------------------------------------
+  PushEvent                       343,626  (64.91%)
+  CreateEvent                      57,268  (10.82%)
+  PullRequestEvent                 33,722  ( 6.37%)
+  IssueCommentEvent                21,082  ( 3.98%)
+  WatchEvent                       18,586  ( 3.51%)
+  DeleteEvent                      13,904  ( 2.63%)
+  PullRequestReviewEvent           12,950  ( 2.45%)
+  PullRequestReviewCommentEvent     8,369  ( 1.58%)
+  IssuesEvent                       8,326  ( 1.57%)
+  ForkEvent                         4,544  ( 0.86%)
+  ReleaseEvent                      2,467  ( 0.47%)
+  MemberEvent                       1,804  ( 0.34%)
+  PublicEvent                       1,654  ( 0.31%)
+  GollumEvent                         725  ( 0.14%)
+  CommitCommentEvent                  324  ( 0.06%)
+  TOTAL distinct types: 15
+
+
+Q2. Top-level field presence rate
+------------------------------------------------------------
+  id              529,351/529,351  (100.00%)  universal
+  type            529,351/529,351  (100.00%)  universal
+  actor           529,351/529,351  (100.00%)  universal
+  repo            529,351/529,351  (100.00%)  universal
+  payload         529,351/529,351  (100.00%)  universal
+  public          529,351/529,351  (100.00%)  universal
+  created_at      529,351/529,351  (100.00%)  universal
+  org             139,742/529,351  ( 26.40%)  partial
+
+
+Q3. event_id uniqueness
+------------------------------------------------------------
+  Total events: 529,351
+  Unique ids:   529,351
+  Duplicates:   0
+  IDs appearing in >1 hourly file: 0
+
+
+Q4. payload field divergence by event type
+------------------------------------------------------------
+
+  [PushEvent] (343,626 events)
+    payload.repository_id             343,626/343,626  (100.00%)
+    payload.push_id                   343,626/343,626  (100.00%)
+    payload.size                      343,626/343,626  (100.00%)
+    payload.distinct_size             343,626/343,626  (100.00%)
+    payload.ref                       343,626/343,626  (100.00%)
+    payload.head                      343,626/343,626  (100.00%)
+    payload.before                    343,626/343,626  (100.00%)
+    payload.commits                   343,626/343,626  (100.00%)
+
+  [CreateEvent] (57,268 events)
+    payload.ref                        57,268/57,268  (100.00%)
+    payload.ref_type                   57,268/57,268  (100.00%)
+    payload.master_branch              57,268/57,268  (100.00%)
+    payload.description                57,268/57,268  (100.00%)
+    payload.pusher_type                57,268/57,268  (100.00%)
+
+  [PullRequestEvent] (33,722 events)
+    payload.action                     33,722/33,722  (100.00%)
+    payload.number                     33,722/33,722  (100.00%)
+    payload.pull_request               33,722/33,722  (100.00%)
+
+  [IssueCommentEvent] (21,082 events)
+    payload.action                     21,082/21,082  (100.00%)
+    payload.issue                      21,082/21,082  (100.00%)
+    payload.comment                    21,082/21,082  (100.00%)
+
+  [WatchEvent] (18,586 events)
+    payload.action                     18,586/18,586  (100.00%)
+
+
+Q5. payload nesting depth
+------------------------------------------------------------
+  PushEvent                 max depth=4  avg=3.99
+  CreateEvent               max depth=1  avg=1.00
+  PullRequestEvent          max depth=5  avg=5.00
+  IssueCommentEvent         max depth=4  avg=3.72
+  WatchEvent                max depth=1  avg=1.00
+
+
+Q6. created_at samples
+------------------------------------------------------------
+  '2025-01-15T12:00:02Z'
+  '2025-01-15T12:00:00Z'
+  '2025-01-15T12:00:03Z'
+  '2025-01-15T12:00:01Z'
+  '2025-01-15T12:00:04Z'
+
+
+Q7. actor / repo / org id types
+------------------------------------------------------------
+  actor: {'id': 29514565, 'login': 'yati1998', 'display_login': 'yati1998', 'gravatar_id': '', 'url': 'https://api.github.com/users/yati1998', 'avatar_url': 'https://avatars.githubusercontent.com/u/29514565?'}  (id type = int)
+  repo: {'id': 379544423, 'name': 'red-hat-storage/ceph-csi', 'url': 'https://api.github.com/repos/red-hat-storage/ceph-csi'}  (id type = int)
+  org: {'id': 13207514, 'login': 'red-hat-storage', 'gravatar_id': '', 'url': 'https://api.github.com/orgs/red-hat-storage', 'avatar_url': 'https://avatars.githubusercontent.com/u/13207514?'}  (id type = int)
+
+  actor present in 529,351/529,351 events
+  repo  present in 529,351/529,351 events
+  org   present in 139,742/529,351 events  (sparse on purpose)
+
+============================================================
+Done. Now fill in docs/schema_discovery.md based on the above.
+============================================================
