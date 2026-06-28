@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "A production-grade GitHub activity lakehouse built on GH Archive."
 requires-python = ">=3.11"
 dependencies = [
+    "dbt-core==1.9.2",
+    "dbt-spark[pyhive]==1.9.2",
     "delta-spark==3.2.1",
     "ipython>=9.15.0",
     "pandas>=3.0.3",
