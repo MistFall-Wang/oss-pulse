@@ -4,21 +4,14 @@ locals {
   gold_bucket   = "oss-pulse-gold-${var.environment}-${var.bucket_suffix}"
 }
 
-# KMS key shared across all three layer buckets so a single key
-# rotation covers everything. Separate buckets are kept (not one bucket
-# with prefixes) so per-layer lifecycle policies and S3 access logging
-# stay clean.
-
-resource "aws_kms_key" "lakehouse" {
-  description             = "OSS Pulse lakehouse at-rest encryption"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-}
-
-resource "aws_kms_alias" "lakehouse" {
-  name          = "alias/oss-pulse-${var.environment}"
-  target_key_id = aws_kms_key.lakehouse.key_id
-}
+# NOTE: original design used a customer-managed KMS key for at-rest
+# encryption (compliance-grade). The KMS resources were removed for the
+# initial apply because the `de-portfolio-cli` IAM user does not have
+# kms:CreateKey/TagResource. AWS auto-enables SSE-S3 (AES256) on every
+# new bucket since Jan 2023, so the buckets are still encrypted at rest
+# — just with an AWS-managed key. To upgrade to SSE-KMS later, grant
+# kms:* to the bootstrapping principal and restore the KMS resources
+# from git history (commit before this file's last edit).
 
 resource "aws_s3_bucket" "bronze" {
   bucket = local.bronze_bucket
@@ -30,37 +23,6 @@ resource "aws_s3_bucket" "silver" {
 
 resource "aws_s3_bucket" "gold" {
   bucket = local.gold_bucket
-}
-
-# Enforce KMS-encryption-at-rest on every bucket.
-resource "aws_s3_bucket_server_side_encryption_configuration" "bronze" {
-  bucket = aws_s3_bucket.bronze.id
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.lakehouse.arn
-      sse_algorithm     = "aws:kms"
-    }
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "silver" {
-  bucket = aws_s3_bucket.silver.id
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.lakehouse.arn
-      sse_algorithm     = "aws:kms"
-    }
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "gold" {
-  bucket = aws_s3_bucket.gold.id
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.lakehouse.arn
-      sse_algorithm     = "aws:kms"
-    }
-  }
 }
 
 # Block all public access on every bucket. Lakehouse data is internal

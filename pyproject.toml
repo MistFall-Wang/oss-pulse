@@ -5,6 +5,7 @@ description = "A production-grade GitHub activity lakehouse built on GH Archive.
 requires-python = ">=3.11"
 dependencies = [
     "apache-airflow==2.10.4",
+    "boto3>=1.43.36",
     "dbt-core==1.9.2",
     "dbt-spark[pyhive]==1.9.2",
     "delta-spark==3.2.1",

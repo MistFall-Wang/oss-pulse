@@ -1,5 +1,16 @@
+# Local terraform vars (per-environment, often with secrets/IDs)
 terraform.tfvars
+
+# Local state — never commit; sensitive resource IDs + would clash on team use
 *.tfstate
 *.tfstate.backup
+
+# Local cache of downloaded providers
 .terraform/
-.terraform.lock.hcl
+
+# Ephemeral plan binaries (output of `terraform plan -out=...`)
+tfplan
+*.tfplan
+
+# .terraform.lock.hcl: tracked for reproducibility (HashiCorp recommended)
+# Do NOT add it to this gitignore.
