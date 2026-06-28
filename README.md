@@ -5,8 +5,9 @@
 <p align="center">
   <a href="https://github.com/MistFall-Wang/oss-pulse/actions/workflows/ci.yml"><img src="https://github.com/MistFall-Wang/oss-pulse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   &nbsp;
-  <img src="https://img.shields.io/badge/AWS%20S3-live-22c55e?logo=amazonaws&logoColor=white" alt="AWS S3 live">
   <img src="https://img.shields.io/badge/reconcile%20delta-0.0000%25-22c55e" alt="reconcile delta 0">
+  <img src="https://img.shields.io/badge/dbt%20tests-100%2B-22c55e" alt="100+ dbt tests">
+  <img src="https://img.shields.io/badge/DQ%20gates-18-22c55e" alt="18 DQ gates">
   <img src="https://img.shields.io/badge/ADRs-7%20accepted-d97706" alt="7 ADRs">
   <img src="https://img.shields.io/badge/postmortems-1-d97706" alt="1 postmortem">
 </p>
@@ -34,9 +35,7 @@ through Bronze → Silver → Gold, gated by **18 data-quality checks** at every
 layer boundary. A deliberately-induced incident with a real postmortem, an
 honest performance report that says "OPTIMIZE didn't help here, here's why",
 and a streaming MVP that reconciled 181,221 events against batch with **zero
-row delta**. Bronze layer is live on AWS S3, queryable by the same Spark
-that runs locally, and the ADR-0002 idempotency invariant survives the
-cloud round-trip.
+row delta**.
 
 > [!TIP]
 > Every irreversible decision in this project has an
@@ -61,8 +60,8 @@ cloud round-trip.
       <sub><b>data-quality gates</b><br>across 4 suites,<br>exit-coded for Airflow</sub>
     </td>
     <td align="center" width="20%">
-      <h2><a href="docs/runbooks/cloud_apply_walkthrough.md">live</a></h2>
-      <sub><b>Bronze on AWS&nbsp;S3</b><br>Terraform-applied,<br>smoke-test PASS</sub>
+      <h2><a href="docs/postmortems/0001-schema-drift.md">200</a></h2>
+      <sub><b>rows of injected breakage</b><br>caught at the right gate<br>after the postmortem fix</sub>
     </td>
     <td align="center" width="20%">
       <h2><a href="docs/performance/sprint5b_tuning.md">−1.8&nbsp;s</a></h2>
@@ -78,12 +77,12 @@ Every layer chosen with an alternative explicitly rejected. Versions pinned in `
 | Layer | Tool | Version | Why this, not the obvious alternative |
 |-------|------|---------|----------------------------------------|
 | **Compute** | ![Spark](https://img.shields.io/badge/-PySpark-e25a1c?logo=apachespark&logoColor=white) | 3.5 | Same code runs on Databricks at TB scale; Pandas was fine for 613K rows but not for the all-year backfill target |
-| **Storage** | ![S3](https://img.shields.io/badge/-AWS%20S3-ff9900?logo=amazonaws&logoColor=white) + local FS | live | Local dev → S3 via Terraform, single `s3a://` URI swap |
+| **Storage** | local filesystem (dev) | — | S3 swap is single `s3a://` URI; Terraform code for it is in `terraform/` (not deployed) |
 | **Table format** | ![Delta](https://img.shields.io/badge/-Delta%20Lake-00add8) | 3.2.1 | MERGE syntax + dbt-spark adapter maturity; Iceberg revisit when Unity Catalog is needed |
 | **Transformation** | ![dbt](https://img.shields.io/badge/-dbt--spark-ff694b?logo=dbt&logoColor=white) + dbt-utils | 1.9.2 / 1.4 | `ref()` / `source()` + declarative tests beat hand-managed model deps |
 | **Orchestration** | ![Airflow](https://img.shields.io/badge/-Airflow-017cee?logo=apacheairflow&logoColor=white) | 2.10.4 | Standard Sr DE expectation; parameterized DAG via XCom-passed bash script |
 | **Streaming** | ![Redpanda](https://img.shields.io/badge/-Redpanda-d97706) + Spark Structured Streaming | v24.2.7 | Kafka-API compatible, 2 s boot vs 30 s; consumer code unchanged |
-| **Cloud IaC** | ![Terraform](https://img.shields.io/badge/-Terraform-7b42bc?logo=terraform&logoColor=white) | 1.15.7 | Real `terraform apply`; partial fallback when bootstrap IAM lacks `kms:*` documented in runbook |
+| **Cloud IaC** | ![Terraform](https://img.shields.io/badge/-Terraform-7b42bc?logo=terraform&logoColor=white) | 1.15.7 | `.tf` for S3 + IAM + KMS authored & validated (`terraform plan`); apply step left for a real cloud deployment |
 | **CI/CD** | ![GH Actions](https://img.shields.io/badge/-GitHub%20Actions-2088ff?logo=githubactions&logoColor=white) | — | 3 jobs: ruff · pytest · dbt parse+compile, JDK 17 |
 | **Data quality** | custom Python (NOT Great Expectations) | — | 150 lines mirror GE's checkpoint pattern; trade-off [documented](quality/checks.py) |
 | **Lang / runtime** | ![Python](https://img.shields.io/badge/-Python-3776ab?logo=python&logoColor=white) ![Java](https://img.shields.io/badge/-Java%2017-007396?logo=openjdk&logoColor=white) ![SQL](https://img.shields.io/badge/-SQL-336791) | 3.11 / 17 / — | Java 17 required (Spark 3.5 breaks on Java 18+) |
@@ -317,42 +316,6 @@ uv run python -m streaming.reconcile --ingest-hour 2025-01-15-12
 
 ---
 
-## Cloud — Bronze live on AWS S3
-
-Terraform-provisioned, real, queryable. Same idempotency invariant
-([ADR-0002](docs/adr/0002-event-id-idempotency.md)) survives the cloud
-round-trip.
-
-```mermaid
-flowchart LR
-    Local["data/bronze/events<br/>local Delta · 444 MB · 4 files"]
-    TF["terraform apply<br/>16 resources, 0 destroy"]:::infra
-    S3["s3a://oss-pulse-bronze-dev-9f3eb8a5<br/>events/ — 28 objects · 444 MB"]:::aws
-    Smoke["spark.jobs.s3_smoke_test<br/>(via hadoop-aws + delta-spark)"]:::test
-    OK["613,876 rows<br/>= 613,876 distinct ids<br/>PASS"]:::pass
-
-    Local -->|aws s3 sync<br/>preserves _delta_log| S3
-    TF -.->|provisions buckets +<br/>versioning + lifecycle| S3
-    S3 -->|s3a://| Smoke
-    Smoke --> OK
-
-    classDef infra fill:#f3e8ff,stroke:#7e22ce,color:#3b0764
-    classDef aws   fill:#fff3e0,stroke:#f97316,color:#7c2d12
-    classDef test  fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
-    classDef pass  fill:#d1fae5,stroke:#059669,color:#064e3b,font-weight:bold
-```
-
-> [!NOTE]
-> Customer-managed KMS and the Databricks cross-account IAM role were
-> **deferred** from the initial apply because the bootstrapping IAM user
-> doesn't have `kms:CreateKey` or `iam:CreateRole`. The buckets fall back
-> to AWS-default SSE-S3 (AES256, AWS-managed key — still encrypted at rest).
-> Step 9.0 of the [cloud apply walkthrough](docs/runbooks/cloud_apply_walkthrough.md)
-> shows how to re-enable KMS + IAM later. **Cost while running: ~$0/mo** in
-> the AWS Free Tier; back to $0 immediately after `terraform destroy`.
-
----
-
 ## The deliberate incident drill
 
 Sprint 5b: synthesize 200 PushEvent rows where `payload.size` was renamed to
@@ -442,7 +405,6 @@ mindmap
     Idempotency
       MERGE on event_id
       Cross-layer verifiers in spark/jobs
-      Cloud round-trip invariant
     Backfill / replay
       Airflow params.start_hour
       runbooks/backfill.md
@@ -469,7 +431,7 @@ mindmap
 
 | # | Signal | Lives in |
 |---|--------|----------|
-| 1 | **Idempotency** | Bronze + Silver + Gold all MERGE on natural ids; runtime invariants in [`spark/jobs/gold_verify.py`](spark/jobs/gold_verify.py), [`gold_health_verify.py`](spark/jobs/gold_health_verify.py), [`gold_bot_verify.py`](spark/jobs/gold_bot_verify.py), [`s3_smoke_test.py`](spark/jobs/s3_smoke_test.py) (cloud round-trip) |
+| 1 | **Idempotency** | Bronze + Silver + Gold all MERGE on natural ids; runtime invariants in [`spark/jobs/gold_verify.py`](spark/jobs/gold_verify.py), [`gold_health_verify.py`](spark/jobs/gold_health_verify.py), [`gold_bot_verify.py`](spark/jobs/gold_bot_verify.py) |
 | 2 | **Backfill / replay** | Airflow DAG `params.start_hour` / `end_hour`; [`docs/runbooks/backfill.md`](docs/runbooks/backfill.md) |
 | 3 | **Schema-drift tolerance** | [ADR-0001](docs/adr/0001-payload-handling.md) (Bronze contract) + [postmortem 0001](docs/postmortems/0001-schema-drift.md) (proven under a real injected break) |
 | 4 | **DQ gates** | [`quality/runner.py`](quality/runner.py) — 18 checks across 4 suites, each exits non-zero to gate the next Airflow task |
@@ -542,9 +504,9 @@ timeline
               : Perf tuning report
               : ADR-0007
               : Postmortem 0001
-    Sprint 5a : Terraform · S3 · IAM
-              : Apply on AWS Live ☁
-              : Smoke test PASS
+    Sprint 5a : Terraform .tf for S3 · IAM
+              : terraform plan validated
+              : (apply step left for deployment)
     Sprint 6 : Streaming MVP
              : Redpanda + foreachBatch + MERGE
              : 0 row reconcile delta
@@ -577,7 +539,7 @@ dbt/                    dbt-spark project
 airflow/dags/           parameterized end-to-end DAG (oss_pulse_pipeline.py)
 streaming/              Sprint 6 MVP (Redpanda + Structured Streaming)
   docker-compose.yml · replay.py · consumer.py · reconcile.py
-terraform/              Sprint 5a IaC (S3 + IAM + KMS — applied on AWS)
+terraform/              Sprint 5a IaC (S3 + IAM + KMS — .tf authored, plan validated, apply not performed)
 data/                   (gitignored)
   raw/                  GH Archive .json.gz inputs
   bronze/               Delta-backed Bronze table
@@ -639,9 +601,6 @@ uv run python -m streaming.reconcile --ingest-hour 2025-01-15-12
 uv run python -m spark.jobs.incident_inject
 # ... observe each gate ...
 uv run python -m spark.jobs.incident_inject --cleanup
-
-# Cloud — read Bronze from S3 (after terraform apply + aws s3 sync)
-uv run python -m spark.jobs.s3_smoke_test --bucket oss-pulse-bronze-dev-9f3eb8a5
 ```
 
 ---
