@@ -40,3 +40,156 @@ models:
         description: Git ref that was pushed (e.g. refs/heads/main)
         tests:
           - not_null
+
+  - name: events_pull_request
+    description: |
+      Silver: flattened PullRequestEvent fields.
+      Source: bronze.events filtered to type='PullRequestEvent'.
+      Idempotency: merge on id (ADR-0002).
+      Tier 2 Silver — feeds gold.oss_health_mart (ADR-0005).
+    columns:
+      - name: id
+        description: GitHub event id
+        tests:
+          - unique
+          - not_null
+      - name: actor_id
+        description: User who triggered the PR event (not necessarily the PR author)
+        tests:
+          - not_null
+      - name: repo_id
+        tests:
+          - not_null
+      - name: created_at
+        description: Event timestamp (when the action happened)
+        tests:
+          - not_null
+      - name: ingest_hour
+        tests:
+          - not_null
+      - name: action
+        description: opened / closed / reopened / edited / labeled / synchronize / ...
+        tests:
+          - not_null
+      - name: pr_id
+        description: GitHub PR id (stable across PR edits)
+        tests:
+          - not_null
+      - name: pr_number
+        description: PR number within the repo
+        tests:
+          - not_null
+      - name: pr_state
+        description: open / closed (at the time of the event)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['open', 'closed']
+      - name: pr_merged
+        description: True if this event represents a merged PR (only meaningful for action='closed')
+      - name: pr_user_id
+        description: PR author user id
+      - name: pr_created_at
+        description: When the PR itself was opened (not the event)
+        tests:
+          - not_null
+      - name: pr_closed_at
+        description: When the PR was closed; null while still open
+      - name: pr_merged_at
+        description: When the PR was merged; null if not merged or still open
+
+  - name: events_issues
+    description: |
+      Silver: flattened IssuesEvent fields (issue lifecycle, not comments).
+      Source: bronze.events filtered to type='IssuesEvent'.
+      Idempotency: merge on id (ADR-0002).
+      Tier 2 Silver — feeds gold.oss_health_mart (ADR-0005).
+    columns:
+      - name: id
+        tests:
+          - unique
+          - not_null
+      - name: actor_id
+        tests:
+          - not_null
+      - name: repo_id
+        tests:
+          - not_null
+      - name: created_at
+        tests:
+          - not_null
+      - name: ingest_hour
+        tests:
+          - not_null
+      - name: action
+        description: opened / closed / reopened / edited / labeled / assigned / ...
+        tests:
+          - not_null
+      - name: issue_id
+        description: GitHub issue id
+        tests:
+          - not_null
+      - name: issue_number
+        tests:
+          - not_null
+      - name: issue_state
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['open', 'closed']
+      - name: issue_user_id
+        description: Issue opener
+      - name: issue_created_at
+        description: When the issue was originally opened
+        tests:
+          - not_null
+      - name: issue_closed_at
+        description: When the issue was closed; null while still open
+
+  - name: events_issue_comment
+    description: |
+      Silver: flattened IssueCommentEvent fields.
+      Source: bronze.events filtered to type='IssueCommentEvent'.
+      Note: GitHub treats PR comments as Issue comments under the hood.
+      Idempotency: merge on id (ADR-0002).
+      Tier 2 Silver — feeds gold.oss_health_mart (issue response time).
+    columns:
+      - name: id
+        tests:
+          - unique
+          - not_null
+      - name: actor_id
+        tests:
+          - not_null
+      - name: repo_id
+        tests:
+          - not_null
+      - name: created_at
+        tests:
+          - not_null
+      - name: ingest_hour
+        tests:
+          - not_null
+      - name: action
+        description: created / edited / deleted
+        tests:
+          - not_null
+      - name: issue_id
+        tests:
+          - not_null
+      - name: comment_id
+        description: GitHub comment id (unique within issue_id)
+        tests:
+          - not_null
+      - name: comment_user_id
+        tests:
+          - not_null
+      - name: comment_created_at
+        tests:
+          - not_null
+      - name: is_app_event
+        description: |
+          True if payload.comment.performed_via_github_app is non-null.
+          NOT a bot identifier — see docs/spikes/bot_heuristic.md.
+          Used by gold.bot_vs_human_activity_mart (Sprint 3b) as an
+          event-level signal, separate from is_bot(actor_login).

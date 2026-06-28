@@ -57,3 +57,86 @@ models:
           - not_null
           - dbt_utils.expression_is_true:
               expression: "= push_count - bot_push_count"
+
+  - name: oss_health_mart
+    description: |
+      Gold: one row per (repo_id, activity_date). Daily project-health
+      signals: PR lifecycle latency, issue lifecycle latency, comment
+      activity, first-response responsiveness, unique contributors.
+
+      Bridges raw activity counts (repo_daily_activity) with the
+      quality dimensions OSS funders / recruiters / vendors care about.
+
+      Sources: silver.events_pull_request, silver.events_issues,
+               silver.events_issue_comment.
+      Design: docs/marts/gold_oss_health_mart.md
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - repo_id
+            - activity_date
+    columns:
+      - name: repo_id
+        description: GitHub repository id (ADR-0004)
+        tests:
+          - not_null
+      - name: activity_date
+        description: |
+          Date the responsive action happened (PR closed, issue closed,
+          comment posted, first response posted). Not the open date.
+        tests:
+          - not_null
+      - name: pr_opened_count
+        description: PullRequestEvent rows with action='opened'
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: pr_closed_count
+        description: PullRequestEvent rows with action='closed' (merged or not)
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: pr_merged_count
+        description: PullRequestEvent rows with action='closed' AND pr_merged=true
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+          - dbt_utils.expression_is_true:
+              expression: "<= pr_closed_count"
+      - name: pr_avg_merge_latency_hours
+        description: |
+          For PRs merged on this day, avg(merged_at - created_at) in hours.
+          Null when pr_merged_count = 0.
+      - name: issue_opened_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: issue_closed_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: issue_avg_close_latency_hours
+        description: avg(issue_closed_at - issue_created_at) in hours, null when no closes
+      - name: issue_comment_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: issue_avg_first_response_hours
+        description: |
+          Per-issue: first non-opener comment timestamp minus issue open
+          timestamp, averaged across issues whose first response happened
+          on this day. Sample-window limitation documented in design doc.
+      - name: unique_contributors
+        description: |
+          count(distinct actor_id) across PR + issue + comment events for
+          this repo on this day
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
