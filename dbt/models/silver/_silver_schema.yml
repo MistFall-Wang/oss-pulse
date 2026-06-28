@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: events_push
+    description: |
+      Silver: flattened PushEvent fields.
+      Source: bronze.events filtered to type='PushEvent', payload_raw parsed.
+      Idempotency: merge on id (mirrors ADR-0002 Bronze contract).
+    columns:
+      - name: id
+        description: GitHub event id (primary key, ADR-0002)
+        tests:
+          - unique
+          - not_null
+      - name: actor_id
+        description: GitHub user id who triggered the push
+        tests:
+          - not_null
+      - name: repo_id
+        description: GitHub repository id that received the push
+        tests:
+          - not_null
+      - name: created_at
+        description: Event timestamp (UTC) from GitHub
+        tests:
+          - not_null
+      - name: ingest_hour
+        description: Source file hour (ADR-0003 partition column)
+        tests:
+          - not_null
+      - name: push_id
+        description: payload.push_id from PushEvent
+        tests:
+          - not_null
+      - name: commit_size
+        description: Total commits in this push (payload.size)
+        tests:
+          - not_null
+      - name: ref
+        description: Git ref that was pushed (e.g. refs/heads/main)
+        tests:
+          - not_null
